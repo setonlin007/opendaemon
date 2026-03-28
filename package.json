@@ -1,0 +1,25 @@
+{
+  "name": "opendaemon",
+  "version": "0.1.0",
+  "description": "The self-evolving agent harness that grows with you",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "keywords": [
+    "agent",
+    "harness",
+    "self-evolving",
+    "mcp",
+    "multi-engine"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.86",
+    "better-sqlite3": "^12.8.0"
+  }
+}

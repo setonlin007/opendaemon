@@ -1,0 +1,36 @@
+{
+  "auth": {
+    "password": "change-me"
+  },
+  "engines": [
+    {
+      "id": "claude-opus",
+      "type": "claude-sdk",
+      "label": "Claude Opus",
+      "icon": "C"
+    },
+    {
+      "id": "kimi-k2",
+      "type": "openai",
+      "label": "Kimi K2",
+      "icon": "K",
+      "provider": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKey": "sk-or-xxx",
+        "model": "moonshotai/kimi-k2"
+      }
+    },
+    {
+      "id": "deepseek-v3",
+      "type": "openai",
+      "label": "DeepSeek V3",
+      "icon": "D",
+      "provider": {
+        "baseUrl": "https://api.deepseek.com/v1",
+        "apiKey": "sk-xxx",
+        "model": "deepseek-chat"
+      }
+    }
+  ],
+  "mcp": {}
+}
