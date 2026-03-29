@@ -462,7 +462,19 @@ async function sendMessage() {
       removeLoading();
       const isNetworkError = err.message.includes('network') || err.message.includes('Failed to fetch') || err.message.includes('Load failed') || err.name === 'TypeError';
       if (isNetworkError) {
-        bubble.innerHTML += `<p style="color:#f87171;">Connection lost. The server may have restarted.</p><button onclick="location.reload()" style="margin-top:8px;padding:6px 16px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;">Reload</button>`;
+        bubble.innerHTML += `<p style="color:#f0a030;">Connection lost. Reconnecting...</p>`;
+        // Auto-reconnect: poll until server is back
+        const reconnect = async () => {
+          for (let i = 0; i < 20; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            try {
+              const r = await fetch('/api/engines', { signal: AbortSignal.timeout(3000) });
+              if (r.ok) { location.reload(); return; }
+            } catch {}
+          }
+          bubble.innerHTML += `<p style="color:#f87171;">Server did not come back. <button onclick="location.reload()" style="padding:4px 12px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;">Retry</button></p>`;
+        };
+        reconnect();
       } else {
         bubble.innerHTML += `<p style="color:#f87171;">${esc(err.message)}</p>`;
       }
