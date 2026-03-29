@@ -26,8 +26,20 @@ const MIME = {
   ".css": "text/css",
   ".json": "application/json",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
+  ".pdf": "application/pdf",
+  ".txt": "text/plain; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".xml": "application/xml",
+  ".zip": "application/zip",
+  ".py": "text/x-python; charset=utf-8",
+  ".sh": "text/x-shellscript; charset=utf-8",
 };
 
 // ── Initialize ──
