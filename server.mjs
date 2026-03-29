@@ -171,6 +171,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (method === "PATCH" && path.startsWith("/api/conversations/")) {
+    try {
+      const id = extractParam(req.url, "/api/conversations/");
+      if (!id) { json(res, { error: "id required" }, 400); return; }
+      const body = await readBody(req);
+      if (body.title) {
+        db.prepare("UPDATE conversations SET title = ? WHERE id = ?").run(body.title, id);
+      }
+      json(res, { ok: true });
+    } catch (err) { json(res, { error: err.message }, 500); }
+    return;
+  }
+
   if (method === "DELETE" && path.startsWith("/api/conversations/")) {
     const id = extractParam(req.url, "/api/conversations/");
     if (!id) { json(res, { error: "id required" }, 400); return; }

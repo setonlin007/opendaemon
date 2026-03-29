@@ -27,26 +27,55 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 
 /* ── Sidebar ── */
 .sidebar { width: 260px; min-width: 260px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-.sidebar-header { padding: 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
-.sidebar-header h1 { font-size: 15px; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.btn-new { padding: 6px 14px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
-.btn-new:hover { opacity: 0.85; }
+.sidebar-header { padding: 14px 16px 10px; display: flex; align-items: center; gap: 10px; }
+.sidebar-header h1 { font-size: 15px; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; flex: 1; cursor: pointer; }
+.sidebar-header .sb-icon-btn { width: 30px; height: 30px; background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; transition: all 0.15s; }
+.sidebar-header .sb-icon-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(233,69,96,0.08); }
 
-.engine-select { padding: 8px 16px; }
-.engine-select select { width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; outline: none; }
+.new-chat-bar { padding: 6px 12px 4px; }
+.new-chat-btn { width: 100%; padding: 9px 14px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.15s; letter-spacing: 0.2px; }
+.new-chat-btn:hover { opacity: 0.9; }
+/* Engine picker popover */
+.engine-picker { display: none; position: absolute; left: 12px; right: 12px; top: 100%; margin-top: 4px; background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 10px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 50; }
+.engine-picker.open { display: block; }
+.engine-picker-item { padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+.engine-picker-item:hover { background: var(--hover); color: var(--text); }
+.engine-picker-item.selected { background: var(--active); color: var(--text); }
+.new-chat-wrap { position: relative; }
 
-.conv-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
-.conv-group-label { padding: 8px 12px 4px; font-size: 11px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-.conv-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; margin-bottom: 1px; }
+/* Search bar */
+.sb-search-bar { padding: 4px 12px 6px; display: none; }
+.sb-search-bar.visible { display: block; }
+.sb-search-wrap { position: relative; }
+.sb-search-wrap .sb-search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 12px; pointer-events: none; }
+.sb-search-input { width: 100%; padding: 7px 10px 7px 28px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 12px; outline: none; }
+.sb-search-input::placeholder { color: var(--text-3); }
+.sb-search-input:focus { border-color: var(--accent); }
+
+.engine-select { display: none; }
+
+.conv-list { flex: 1; overflow-y: auto; padding: 2px 8px; }
+.conv-group-label { padding: 8px 12px 4px; font-size: 10px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; }
+.conv-item { padding: 9px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; margin-bottom: 1px; transition: background 0.1s; border-left: 2px solid transparent; }
 .conv-item:hover { background: var(--hover); }
-.conv-item.active { background: var(--active); }
-.conv-icon { width: 22px; height: 22px; border-radius: 6px; background: var(--accent-2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.conv-item.active { background: var(--active); border-left-color: var(--accent); }
+.conv-icon { width: 22px; height: 22px; border-radius: 6px; background: rgba(233,69,96,0.15); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
 .conv-title { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conv-time { font-size: 10px; color: var(--text-3); flex-shrink: 0; margin-right: 2px; }
+.conv-item:hover .conv-time { display: none; }
 .conv-del { display: none; width: 22px; height: 22px; border: none; background: none; cursor: pointer; color: var(--text-3); border-radius: 4px; font-size: 14px; flex-shrink: 0; align-items: center; justify-content: center; }
 .conv-item:hover .conv-del { display: flex; }
 .conv-del:hover { color: var(--accent); background: rgba(233,69,96,0.1); }
+/* Context menu */
+.conv-ctx-menu { position: fixed; background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 10px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 200; min-width: 150px; display: none; }
+.conv-ctx-menu.open { display: block; }
+.conv-ctx-item { padding: 7px 12px; border-radius: 6px; font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.conv-ctx-item:hover { background: var(--hover); color: var(--text); }
+.conv-ctx-item.danger { color: #f87171; }
+.conv-ctx-item.danger:hover { background: rgba(248,113,113,0.08); }
+.conv-ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
 /* Unread dot on conversation item */
-.conv-unread { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; display: none; }
+.conv-unread { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; display: none; }
 .conv-item.unread .conv-unread { display: block; }
 .conv-item.unread .conv-title { color: #fff; font-weight: 600; }
 /* Notification dot on menu button */
@@ -54,9 +83,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .menu-dot { display: none; position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .menu-btn.has-unread .menu-dot { display: block; }
 
-.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-3); display: flex; justify-content: space-between; }
-.sidebar-footer a { color: var(--text-3); text-decoration: none; }
-.sidebar-footer a:hover { color: var(--accent); }
+.sidebar-footer { padding: 6px 8px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 2px; }
+.sidebar-footer .footer-btn { flex: 1; padding: 7px 4px; background: none; border: none; border-radius: 8px; color: var(--text-3); font-size: 11px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; transition: all 0.15s; }
+.sidebar-footer .footer-btn:hover { background: var(--hover); color: var(--accent); }
+.sidebar-footer .footer-btn .footer-icon { font-size: 16px; line-height: 1; }
+.sidebar-footer .footer-btn .footer-label { font-size: 10px; letter-spacing: 0.2px; }
 
 /* ── Main ── */
 .main { flex: 1; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
@@ -267,7 +298,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 }
 
 /* ── Evolution Panel ── */
-.evo-btn { background: none; border: 1px solid var(--border); color: var(--text-2); padding: 3px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; }
+.evo-btn { background: none; border: 1px solid var(--border); color: var(--text-2); padding: 3px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; display: none; }
 .evo-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ── About / Guide Panel ── */
@@ -430,19 +461,73 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 <aside class="sidebar">
   <div class="sidebar-header">
     <h1 onclick="openAboutPanel()">OpenDaemon</h1>
-    <button class="btn-new" onclick="newChat()">+ New</button>
+    <button class="sb-icon-btn" onclick="toggleSidebarSearch()" title="Search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </button>
+    <button class="sb-icon-btn" onclick="openAboutPanel()" title="Settings">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+  <div class="new-chat-wrap">
+    <div class="new-chat-bar">
+      <button class="new-chat-btn" onclick="newChat()" oncontextmenu="event.preventDefault();toggleEnginePicker()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New Chat
+      </button>
+    </div>
+    <div class="engine-picker" id="enginePicker"></div>
+  </div>
+  <div class="sb-search-bar" id="sbSearchBar">
+    <div class="sb-search-wrap">
+      <span class="sb-search-icon">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </span>
+      <input class="sb-search-input" id="sbSearchInput" type="text" placeholder="Search conversations..." oninput="filterConversations(this.value)">
+    </div>
   </div>
   <div class="engine-select">
     <select id="engineSelect"></select>
   </div>
   <div class="conv-list" id="convList"></div>
   <div class="sidebar-footer">
-    <span style="cursor:pointer" onclick="openAboutPanel();switchAboutTab('changelog',document.querySelectorAll('.about-nav-item')[3])">v0.5.0</span>
-    <button class="evo-btn" onclick="openArtifactsPanel()">📁 Files</button>
-    <button class="evo-btn" onclick="openEvolutionPanel()">🧠 Evolution</button>
-    <a href="/api/logout">Logout</a>
+    <button class="footer-btn" onclick="openArtifactsPanel()">
+      <span class="footer-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </span>
+      <span class="footer-label">Files</span>
+    </button>
+    <button class="footer-btn" onclick="openEvolutionPanel()">
+      <span class="footer-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.57-3.25 3.92L12 10v2"/><circle cx="12" cy="16" r="4"/><path d="M8 16h-.5a2.5 2.5 0 0 1 0-5H8"/><path d="M16 16h.5a2.5 2.5 0 0 0 0-5H16"/><path d="M12 20v2"/></svg>
+      </span>
+      <span class="footer-label">Memory</span>
+    </button>
+    <button class="footer-btn" onclick="openAboutPanel();switchAboutTab('changelog',document.querySelectorAll('.about-nav-item')[3])">
+      <span class="footer-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </span>
+      <span class="footer-label">v0.5.0</span>
+    </button>
+    <button class="footer-btn" onclick="window.location.href='/api/logout'">
+      <span class="footer-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </span>
+      <span class="footer-label">Logout</span>
+    </button>
   </div>
 </aside>
+<!-- Context menu (shared, positioned dynamically) -->
+<div class="conv-ctx-menu" id="convCtxMenu">
+  <div class="conv-ctx-item" onclick="ctxRenameConv()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    Rename
+  </div>
+  <div class="conv-ctx-divider"></div>
+  <div class="conv-ctx-item danger" onclick="ctxDeleteConv()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    Delete
+  </div>
+</div>
 
 <!-- Mobile overlay -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -610,16 +695,30 @@ async function loadConversations() {
   renderConversations();
 }
 
-function renderConversations() {
-  if (conversations.length === 0) {
-    convList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px;">No conversations yet</div>';
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return 'now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
+  if (diff < 604800000) return Math.floor(diff / 86400000) + 'd';
+  return Math.floor(diff / 604800000) + 'w';
+}
+
+function renderConversations(filter) {
+  let list = conversations;
+  if (filter) {
+    const q = filter.toLowerCase();
+    list = conversations.filter(c => c.title.toLowerCase().includes(q));
+  }
+  if (list.length === 0) {
+    convList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px;">${filter ? 'No matches' : 'No conversations yet'}</div>`;
     return;
   }
   const now = Date.now();
   const dayMs = 86400000;
   const todayStart = new Date().setHours(0,0,0,0);
   const groups = { today: [], yesterday: [], earlier: [] };
-  for (const c of conversations) {
+  for (const c of list) {
     if (c.updated_at >= todayStart) groups.today.push(c);
     else if (c.updated_at >= todayStart - dayMs) groups.yesterday.push(c);
     else groups.earlier.push(c);
@@ -634,10 +733,12 @@ function renderConversations() {
       const icon = eng?.icon || '?';
       const active = c.id === currentConvId ? ' active' : '';
       const unread = unreadConvs.has(c.id) ? ' unread' : '';
-      h += `<div class="conv-item${active}${unread}" data-conv-id="${c.id}" onclick="selectConversation('${c.id}')">
+      const time = relativeTime(c.updated_at);
+      h += `<div class="conv-item${active}${unread}" data-conv-id="${c.id}" onclick="selectConversation('${c.id}')" oncontextmenu="event.preventDefault();showConvCtxMenu(event,'${c.id}')">
         <div class="conv-icon">${esc(icon)}</div>
         <div class="conv-title">${esc(c.title)}</div>
         <div class="conv-unread"></div>
+        <span class="conv-time">${time}</span>
         <button class="conv-del" onclick="event.stopPropagation();deleteConv('${c.id}')">&times;</button>
       </div>`;
     }
@@ -649,8 +750,76 @@ function renderConversations() {
   convList.innerHTML = html;
 }
 
+// ── Sidebar search ──
+function toggleSidebarSearch() {
+  const bar = $('sbSearchBar');
+  const isVisible = bar.classList.toggle('visible');
+  if (isVisible) {
+    $('sbSearchInput').focus();
+  } else {
+    $('sbSearchInput').value = '';
+    renderConversations();
+  }
+}
+function filterConversations(q) {
+  renderConversations(q || undefined);
+}
+
+// ── Engine picker popover ──
+function toggleEnginePicker() {
+  const picker = $('enginePicker');
+  if (picker.classList.contains('open')) { picker.classList.remove('open'); return; }
+  picker.innerHTML = engines.map(e => {
+    const sel = e.id === engineSelect.value ? ' selected' : '';
+    return `<div class="engine-picker-item${sel}" onclick="pickEngine('${e.id}')">${e.icon ? e.icon + ' ' : ''}${esc(e.label)}</div>`;
+  }).join('');
+  picker.classList.add('open');
+}
+function pickEngine(id) {
+  engineSelect.value = id;
+  $('enginePicker').classList.remove('open');
+  newChat();
+}
+
+// ── Context menu for conversations ──
+let ctxMenuConvId = null;
+function showConvCtxMenu(e, convId) {
+  ctxMenuConvId = convId;
+  const menu = $('convCtxMenu');
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('open');
+}
+function hideConvCtxMenu() {
+  $('convCtxMenu').classList.remove('open');
+  ctxMenuConvId = null;
+}
+document.addEventListener('click', hideConvCtxMenu);
+
+async function ctxRenameConv() {
+  if (!ctxMenuConvId) return;
+  hideConvCtxMenu();
+  const conv = conversations.find(c => c.id === ctxMenuConvId);
+  if (!conv) return;
+  const newTitle = prompt('Rename conversation:', conv.title);
+  if (newTitle && newTitle.trim()) {
+    try {
+      await api('PATCH', `/api/conversations/${ctxMenuConvId}`, { title: newTitle.trim() });
+      conv.title = newTitle.trim();
+      renderConversations();
+    } catch (err) { console.error('Rename failed:', err); }
+  }
+}
+async function ctxDeleteConv() {
+  if (!ctxMenuConvId) return;
+  const id = ctxMenuConvId;
+  hideConvCtxMenu();
+  await deleteConv(id);
+}
+
 async function newChat() {
   const engineId = engineSelect.value;
+  $('enginePicker').classList.remove('open');
   const conv = await api('POST', '/api/conversations', { engine_id: engineId });
   conversations.unshift(conv);
   renderConversations();
