@@ -16,7 +16,7 @@ A self-evolving agent harness that grows with the user. It sits on top of LLM en
 - **Frontend**: Single HTML files, vanilla JS, no build tools
 - **Claude engine**: `@anthropic-ai/claude-agent-sdk` (Anthropic's agent harness)
 - **OpenAI engine**: Native `fetch` + SSE parsing
-- **MCP Server**: Python (planned, for Jarvis capability migration)
+- **MCP Server**: Python `mcp` SDK (stdio transport, Jarvis skill migration)
 
 ## Directory Structure
 
@@ -34,38 +34,64 @@ opendaemon/
 │   ├── db.mjs            # SQLite schema + CRUD (conversations, messages)
 │   ├── auth.mjs          # Cookie-based auth (HMAC-signed tokens)
 │   ├── engine-claude.mjs # Claude Agent SDK adapter
-│   └── engine-openai.mjs # OpenAI-compatible adapter (streaming + function calling)
+│   ├── engine-openai.mjs # OpenAI-compatible adapter (streaming + function calling)
+│   └── mcp-manager.mjs   # Long-running MCP subprocess manager (JSON-RPC over stdio)
 ├── public/
 │   ├── index.html        # Main UI (sidebar + chat + engine switching)
 │   └── login.html        # Login page
 ├── data/                 # Runtime data (gitignored)
 │   └── opendaemon.db     # SQLite database
-├── mcp/                  # MCP Server (planned)
+├── mcp/                  # Python MCP Server
+│   ├── server.py         # MCP entry point (stdio transport)
+│   ├── requirements.txt  # Python dependencies
+│   ├── channels/         # Messaging channel abstraction
+│   │   ├── base.py       # Channel ABC (send + health_check)
+│   │   ├── bark.py       # Bark iOS push notifications
+│   │   ├── feishu.py     # Feishu Bot REST API
+│   │   └── wechat.py     # WeChat HTTP bridge
+│   ├── tools/            # MCP tool implementations
+│   │   ├── web_search.py # DuckDuckGo search
+│   │   ├── send_message.py # Unified message sending
+│   │   ├── notify.py     # Bark push notifications
+│   │   ├── reminder.py   # One-time scheduled reminders
+│   │   └── cron_task.py  # Periodic scheduled tasks
+│   └── data/             # Runtime data (gitignored)
 └── specs/                # Spec-driven development artifacts
-    └── 001-platform-foundation/
-        ├── spec.md
-        ├── plan.md
-        └── tasks.md
+    ├── 001-platform-foundation/
+    └── 002-mcp-capability-layer/
 ```
 
 ## Architecture
 
 ```
 Browser → server.mjs → auth check → route dispatch
-                          │
-             ┌────────────┼────────────┐
-             ▼            ▼            ▼
-        /api/chat    /api/conv*    /api/engines
-             │
-     engine dispatch by conv.engine_id
-             │
-     ┌───────┴───────┐
-     ▼               ▼
+                │
+   ┌────────────┼────────────┐
+   ▼            ▼            ▼
+/api/chat    /api/conv*    /api/engines
+   │
+   engine dispatch by conv.engine_id
+   │
+   ┌───────┴───────┐
+   ▼               ▼
 engine-claude    engine-openai
   (SDK)         (fetch + SSE)
-     │               │
-     ▼               ▼
-  Claude API     Any OpenAI-compatible API
+   │               │
+   │    ┌──────────┘
+   │    ▼
+   │  MCPManager ──── JSON-RPC stdio ────┐
+   │                                      │
+   └── native MCP ───────────────────────┤
+                                          ▼
+                                   mcp/server.py (Python)
+                                          │
+                          ┌───────┬───────┼───────┬──────────┐
+                          ▼       ▼       ▼       ▼          ▼
+                     web_search send_msg notify reminder  cron_task
+                          │       │       │       │          │
+                          ▼       ▼       ▼       ▼          ▼
+                     DuckDuckGo  Channels Bark  Timer+JSON  Scheduler+JSON
+                              (WeChat/Feishu/Bark)
 ```
 
 ### Engine Types
@@ -108,7 +134,14 @@ messages (id INTEGER PK, conv_id FK, role, content, metadata JSON, created_at)
       "provider": { "baseUrl": "...", "apiKey": "...", "model": "..." } }
   ],
   "mcp": {
-    "server-name": { "command": "python", "args": ["mcp/server.py"] }
+    "opendaemon": {
+      "command": "python", "args": ["mcp/server.py"],
+      "channels": {
+        "bark":   { "type": "bark",   "key": "...", "server": "https://api.day.app" },
+        "feishu": { "type": "feishu", "app_id": "cli_xxx", "app_secret": "xxx", "target_map": {} },
+        "wechat": { "type": "wechat", "sender_url": "http://WINDOWS_IP:5679" }
+      }
+    }
   }
 }
 ```
@@ -138,6 +171,21 @@ messages (id INTEGER PK, conv_id FK, role, content, metadata JSON, created_at)
 3. Auth is automatic (middleware runs on all routes)
 4. Follow existing pattern: check input → do work → return JSON
 
+### Adding a New MCP Tool
+
+1. Create `mcp/tools/{name}.py` with a `Tool` schema and `handle_{name}()` async function
+2. Register in `mcp/tools/__init__.py` (add to `ALL_TOOLS` and `TOOL_HANDLERS`)
+3. Tool receives `arguments: dict` and `channels: dict` kwargs
+4. Returns `list[TextContent]`
+5. No server.mjs changes needed (tools auto-discovered via MCP `tools/list`)
+
+### Adding a New Channel Type
+
+1. Create `mcp/channels/{name}.py` implementing `Channel` base class
+2. Implement `send(target, content) -> bool`
+3. Register in `mcp/channels/__init__.py` `CHANNEL_TYPES`
+4. Add config in `config.json` under `mcp.opendaemon.channels`
+
 ### Frontend Conventions
 
 - All state in global variables (no framework state management)
@@ -158,6 +206,10 @@ messages (id INTEGER PK, conv_id FK, role, content, metadata JSON, created_at)
 
 5. **Claude SDK license restriction** — Anthropic does not allow third-party products to offer claude.ai OAuth login. The `claude-sdk` engine type is optional. OpenAI engines have no such restriction.
 
+6. **Why long-running MCP process?** — Reminder timers and cron scheduler live in the MCP Server process memory. If we spawned per-call, these would be lost. MCPManager (`lib/mcp-manager.mjs`) keeps the Python process alive and communicates via stdin/stdout JSON-RPC.
+
+7. **Why channels config inside MCP config?** — Channels are only used by MCP tools (send_message, notify, reminder, cron). Keeping them under `mcp.opendaemon.channels` avoids config sprawl and makes it clear they're MCP Server concerns.
+
 ## Spec-Driven Development
 
 Major features use SDD (GitHub Spec Kit pattern):
@@ -171,7 +223,7 @@ Small changes (bug fixes, config additions) skip SDD and go directly to implemen
 ## Roadmap Context
 
 - **Phase 0**: Platform foundation (DONE) — multi-engine, auth, sessions, web UI
-- **Phase 1**: MCP capability layer — Python MCP Server exposing Jarvis skills
+- **Phase 1**: MCP capability layer (DONE) — Python MCP Server with web_search, send_message, notify, reminder, cron_task
 - **Phase 2**: Self-evolution — trace → reflect → learn → inject loop
 - **Phase 3**: Advanced harness — sub-agents, evaluator, prompt optimization
 

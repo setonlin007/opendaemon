@@ -1,6 +1,10 @@
 node_modules/
 data/
+mcp/data/
+mcp/.venv/
 config.json
 *.db
 .env
 .DS_Store
+__pycache__/
+*.pyc

@@ -36,5 +36,28 @@
       }
     }
   ],
-  "mcp": {}
+  "mcp": {
+    "opendaemon": {
+      "command": "mcp/.venv/bin/python",
+      "args": ["mcp/server.py"],
+      "env": {},
+      "channels": {
+        "bark": {
+          "type": "bark",
+          "key": "YOUR_BARK_KEY",
+          "server": "https://api.day.app"
+        },
+        "feishu": {
+          "type": "feishu",
+          "app_id": "cli_xxx",
+          "app_secret": "xxx",
+          "target_map": {}
+        },
+        "wechat": {
+          "type": "wechat",
+          "sender_url": "http://WINDOWS_IP:5679"
+        }
+      }
+    }
+  }
 }

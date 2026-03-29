@@ -9,6 +9,7 @@ import { initDb, createConversation, listConversations, getConversation, deleteC
 import { createAuth } from "./lib/auth.mjs";
 import { streamClaude, fetchCommands } from "./lib/engine-claude.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
+import { MCPManager } from "./lib/mcp-manager.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +29,23 @@ const PORT = process.env.PORT || config.server?.port || 3456;
 const HOST = process.env.HOST || config.server?.host || "127.0.0.1";
 initDb();
 const auth = createAuth(config.auth.password);
+
+// ── MCP Manager (long-running Python subprocess) ──
+let mcpManager = null;
+
+async function initMCP() {
+  const mcpConfig = config.mcp || {};
+  // Find the first MCP server config (typically "opendaemon")
+  const serverName = Object.keys(mcpConfig)[0];
+  if (!serverName) {
+    console.log("[init] no MCP servers configured");
+    return;
+  }
+  const serverConfig = mcpConfig[serverName];
+  const channelsConfig = serverConfig.channels || {};
+  mcpManager = new MCPManager(serverConfig, channelsConfig);
+  await mcpManager.start();
+}
 
 console.log(`[init] ${config.engines.length} engines configured, listening on ${HOST}:${PORT}`);
 
@@ -241,8 +259,8 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal) {
   const history = getMessages(conv.id);
   const messages = history.map((m) => ({ role: m.role, content: m.content }));
 
-  // Build tools from MCP config for function calling
-  const { tools, onToolCall } = buildMCPTools();
+  // Build tools from MCP Manager (long-running process)
+  const { tools, onToolCall } = await buildMCPTools();
 
   let resultText = "";
   const wrappedOnEvent = (event, data) => {
@@ -264,61 +282,33 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal) {
 }
 
 /**
- * Build OpenAI-format tools from MCP config.
- * MCP tools are defined in config.json under "mcp" with their schemas.
- * When a tool is called, we spawn the MCP server subprocess to execute it.
+ * Build OpenAI-format tools from the long-running MCP Server.
+ * Queries the MCP Server for its tool list via JSON-RPC,
+ * then converts to OpenAI function-calling format.
  */
-function buildMCPTools() {
-  const mcpConfig = config.mcp || {};
-  const tools = [];
-  const toolMap = new Map(); // toolName -> { serverConfig, originalName }
+async function buildMCPTools() {
+  if (!mcpManager) return { tools: [], onToolCall: null };
 
-  for (const [serverName, serverConfig] of Object.entries(mcpConfig)) {
-    const mcpTools = serverConfig.tools || [];
-    for (const tool of mcpTools) {
-      if (typeof tool === "string") {
-        // Simple tool name — no schema, skip for now
-        continue;
-      }
-      // Tool with schema: { name, description, input_schema }
-      const fullName = `${serverName}__${tool.name}`;
-      tools.push({
-        type: "function",
-        function: {
-          name: fullName,
-          description: tool.description || "",
-          parameters: tool.input_schema || { type: "object", properties: {} },
-        },
-      });
-      toolMap.set(fullName, { serverConfig, originalName: tool.name });
-    }
+  let mcpTools;
+  try {
+    mcpTools = await mcpManager.listTools();
+  } catch (err) {
+    console.error("[mcp] failed to list tools:", err.message);
+    return { tools: [], onToolCall: null };
   }
 
-  const onToolCall = async (name, args) => {
-    const mapping = toolMap.get(name);
-    if (!mapping) return `Error: unknown tool ${name}`;
+  const tools = mcpTools.map((t) => ({
+    type: "function",
+    function: {
+      name: t.name,
+      description: t.description || "",
+      parameters: t.inputSchema || { type: "object", properties: {} },
+    },
+  }));
 
-    // Execute via MCP server subprocess (JSON-RPC over stdio)
-    const { serverConfig, originalName } = mapping;
+  const onToolCall = async (name, args) => {
     try {
-      const { execFileSync } = await import("child_process");
-      const input = JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: { name: originalName, arguments: args },
-      });
-      const result = execFileSync(serverConfig.command, [...(serverConfig.args || []), "--call"], {
-        input,
-        timeout: 30000,
-        encoding: "utf-8",
-        env: { ...process.env, ...(serverConfig.env || {}) },
-      });
-      const parsed = JSON.parse(result);
-      if (parsed.result?.content) {
-        return parsed.result.content.map((c) => c.text || JSON.stringify(c)).join("\n");
-      }
-      return result;
+      return await mcpManager.callTool(name, args);
     } catch (err) {
       return `Tool execution error: ${err.message}`;
     }
@@ -329,6 +319,27 @@ function buildMCPTools() {
 
 // ── Start ──
 
-server.listen(PORT, HOST, () => {
-  console.log(`OpenDaemon running at http://${HOST}:${PORT}`);
-});
+async function startup() {
+  try {
+    await initMCP();
+  } catch (err) {
+    console.error("[init] MCP server failed to start:", err.message);
+    console.log("[init] continuing without MCP tools");
+  }
+
+  server.listen(PORT, HOST, () => {
+    console.log(`OpenDaemon running at http://${HOST}:${PORT}`);
+  });
+}
+
+// Graceful shutdown
+function shutdown() {
+  console.log("[shutdown] stopping...");
+  if (mcpManager) mcpManager.stop().catch(() => {});
+  server.close();
+  process.exit(0);
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+startup();
