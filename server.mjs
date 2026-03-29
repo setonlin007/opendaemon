@@ -258,8 +258,19 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal) {
   const FLUSH_INTERVAL = 3000;
 
   const wrappedOnEvent = (event, data) => {
+    let dirty = false;
     if (event === "delta" && data.text) {
       streamedText += data.text;
+      dirty = true;
+    } else if (event === "text" && data.text) {
+      // Complete text block (between tool calls)
+      streamedText = data.text;
+      dirty = true;
+    } else if (event === "tool_use" && data.name) {
+      streamedText += `\n\n> Tool: ${data.name}${data.input?.command ? ` — ${data.input.command.substring(0, 60)}` : data.input?.file_path ? ` — ${data.input.file_path}` : ""}\n`;
+      dirty = true;
+    }
+    if (dirty) {
       const now = Date.now();
       if (now - lastFlush >= FLUSH_INTERVAL) {
         updateMessageContent(msg.id, streamedText);
