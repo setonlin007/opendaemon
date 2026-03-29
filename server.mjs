@@ -273,7 +273,7 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal) {
     if (dirty) {
       const now = Date.now();
       if (now - lastFlush >= FLUSH_INTERVAL) {
-        updateMessageContent(msg.id, streamedText);
+        updateMessageContent(msg.id, streamedText + "\n\n<!-- streaming -->");
         lastFlush = now;
       }
     }
@@ -289,7 +289,7 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal) {
     abortSignal,
   });
 
-  // Final update with complete text
+  // Final update — remove streaming marker
   const finalText = resultText || streamedText || "...";
   updateMessageContent(msg.id, finalText);
 
@@ -317,7 +317,7 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal) {
       streamedText += data.text;
       const now = Date.now();
       if (now - lastFlush >= FLUSH_INTERVAL) {
-        updateMessageContent(msg.id, streamedText);
+        updateMessageContent(msg.id, streamedText + "\n\n<!-- streaming -->");
         lastFlush = now;
       }
     }
