@@ -598,20 +598,6 @@ const overlayEl = $('sidebarOverlay');
 function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('visible'); }
 function closeSidebar() { sidebarEl.classList.remove('open'); overlayEl.classList.remove('visible'); }
 
-// ── Mobile keyboard viewport fix ──
-if (window.visualViewport) {
-  const metaViewport = document.querySelector('meta[name="viewport"]');
-  function onViewportResize() {
-    const vv = window.visualViewport;
-    document.body.style.height = vv.height + 'px';
-    // Ensure input stays visible when keyboard pushes viewport
-    window.scrollTo(0, 0);
-  }
-  window.visualViewport.addEventListener('resize', onViewportResize);
-  // Also handle orientation changes
-  window.visualViewport.addEventListener('scroll', () => window.scrollTo(0, 0));
-}
-
 // ── Start ──
 init();
 </script>
