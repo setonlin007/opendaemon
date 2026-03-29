@@ -226,6 +226,10 @@ async function init() {
     ).join('');
     await loadConversations();
     loadCommands();
+    // Auto-select the most recent conversation
+    if (conversations.length > 0 && !currentConvId) {
+      selectConversation(conversations[0].id);
+    }
   } catch (err) {
     if (err.message.includes('401') || err.message.includes('unauthorized')) {
       window.location.href = '/login.html';
