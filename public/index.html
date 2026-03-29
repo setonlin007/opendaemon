@@ -349,6 +349,7 @@ async function selectConversation(id) {
   } else {
     for (const m of msgs) {
       if (m.role === 'user') addUserBubble(m.content);
+      else if (m.content === '...') addStreamingBubble();
       else addAssistantBubble(m.content);
     }
     // Ensure scroll happens after browser has laid out all content
@@ -558,15 +559,30 @@ function addAssistantBubble(text) {
   div.innerHTML = `<button class="msg-copy" onclick="copyMsg(this)">Copy</button><div class="bubble">${renderMd(text)}</div>`;
   messagesEl.appendChild(div);
 }
-
 function copyMsg(btn) {
   const bubble = btn.closest('.message').querySelector('.bubble');
-  // Get text content (strips HTML) for clean copy
   const text = bubble.innerText;
   navigator.clipboard.writeText(text).then(() => {
     btn.textContent = 'Copied!';
     setTimeout(() => btn.textContent = 'Copy', 1500);
   });
+}
+function addStreamingBubble() {
+  const div = document.createElement('div'); div.className = 'message assistant';
+  div.innerHTML = '<div class="bubble"><div class="loading-indicator"><div class="spinner"></div><span>Responding on another device...</span></div></div>';
+  div.dataset.streaming = '1';
+  messagesEl.appendChild(div);
+  const poll = setInterval(async () => {
+    if (!currentConvId) { clearInterval(poll); return; }
+    const msgs = await api('GET', `/api/conversations/${currentConvId}/messages`);
+    const last = msgs[msgs.length - 1];
+    if (last && last.role === 'assistant' && last.content !== '...') {
+      clearInterval(poll);
+      div.querySelector('.bubble').innerHTML = renderMd(last.content);
+      delete div.dataset.streaming;
+      scrollToBottom();
+    }
+  }, 3000);
 }
 function createAssistantBubble() {
   const w = messagesEl.querySelector('.welcome'); if (w) w.remove();

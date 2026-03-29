@@ -5,7 +5,7 @@ import { dirname, join } from "path";
 import { readFileSync, existsSync, statSync } from "fs";
 
 import { loadConfig, getEngineById, getEngines } from "./lib/config.mjs";
-import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
+import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
 import { createAuth } from "./lib/auth.mjs";
 import { streamClaude, fetchCommands } from "./lib/engine-claude.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
@@ -251,31 +251,65 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal) {
     mcpServers[name] = serverConfig;
   }
 
+  // Insert placeholder message at start, update progressively
+  const msg = addMessage(conv.id, "assistant", "...");
+  let streamedText = "";
+  let lastFlush = Date.now();
+  const FLUSH_INTERVAL = 3000;
+
+  const wrappedOnEvent = (event, data) => {
+    if (event === "delta" && data.text) {
+      streamedText += data.text;
+      const now = Date.now();
+      if (now - lastFlush >= FLUSH_INTERVAL) {
+        updateMessageContent(msg.id, streamedText);
+        lastFlush = now;
+      }
+    }
+    onEvent(event, data);
+  };
+
   const { sessionId, resultText } = await streamClaude({
     prompt,
     convId: conv.id,
     sdkSessionId: conv.sdk_session,
     mcpServers,
-    onEvent,
+    onEvent: wrappedOnEvent,
     abortSignal,
   });
 
-  // Persist session and assistant message
+  // Final update with complete text
+  const finalText = resultText || streamedText || "...";
+  updateMessageContent(msg.id, finalText);
+
   if (sessionId) updateConversationSdkSession(conv.id, sessionId);
-  if (resultText) addMessage(conv.id, "assistant", resultText);
 }
 
 async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal) {
-  // Build messages array from history
+  // Build messages array from history (exclude placeholder "..." messages)
   const history = getMessages(conv.id);
-  const messages = history.map((m) => ({ role: m.role, content: m.content }));
+  const messages = history.filter((m) => m.content !== "...").map((m) => ({ role: m.role, content: m.content }));
 
   // Build tools from MCP Manager (long-running process)
   const { tools, onToolCall } = await buildMCPTools();
 
+  // Insert placeholder message, update progressively
+  const msg = addMessage(conv.id, "assistant", "...");
+  let streamedText = "";
+  let lastFlush = Date.now();
+  const FLUSH_INTERVAL = 3000;
+
   let resultText = "";
   const wrappedOnEvent = (event, data) => {
     if (event === "result" && data.result) resultText = data.result;
+    if (event === "delta" && data.text) {
+      streamedText += data.text;
+      const now = Date.now();
+      if (now - lastFlush >= FLUSH_INTERVAL) {
+        updateMessageContent(msg.id, streamedText);
+        lastFlush = now;
+      }
+    }
     onEvent(event, data);
   };
 
@@ -288,8 +322,9 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal) {
     abortSignal,
   });
 
-  // Save assistant message
-  if (resultText) addMessage(conv.id, "assistant", resultText);
+  // Final update with complete text
+  const finalText = resultText || streamedText || "...";
+  updateMessageContent(msg.id, finalText);
 }
 
 /**
