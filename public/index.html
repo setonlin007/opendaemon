@@ -709,6 +709,29 @@ async function sendMessage() {
   let currentThinkingBlock = null;
   let loadingRemoved = false;
   let assistantMsgId = null;
+  let renderTimer = null;
+  let lastRenderLen = 0;
+
+  // Throttled markdown render — only re-render when enough new text accumulated or on timer
+  function scheduleRender() {
+    if (renderTimer) return;
+    renderTimer = setTimeout(() => {
+      renderTimer = null;
+      if (lastDeltaNode && streamedText.length > lastRenderLen) {
+        lastDeltaNode.innerHTML = renderMd(streamedText);
+        lastRenderLen = streamedText.length;
+        scrollToBottom();
+      }
+    }, 80);
+  }
+  function flushRender() {
+    if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
+    if (lastDeltaNode && streamedText) {
+      lastDeltaNode.innerHTML = renderMd(streamedText);
+      lastRenderLen = streamedText.length;
+      scrollToBottom();
+    }
+  }
 
   function removeLoading() {
     if (loadingRemoved) return;
@@ -750,25 +773,20 @@ async function sendMessage() {
                 removeLoading();
                 streamedText += data.text;
                 if (!lastDeltaNode) { lastDeltaNode = document.createElement('div'); lastDeltaNode.className = 'streamed-text'; bubble.appendChild(lastDeltaNode); }
-                lastDeltaNode.innerHTML = renderMd(streamedText);
-                // Throttle scroll during streaming to avoid jank
-                const now = Date.now();
-                if (!sendMessage._lastScroll || now - sendMessage._lastScroll > 100) {
-                  sendMessage._lastScroll = now;
-                  scrollToBottom();
-                }
+                scheduleRender();
                 break;
               case 'text':
                 removeLoading();
                 if (lastDeltaNode) {
                   // Finalize the streamed-text div with the complete text
-                  lastDeltaNode.innerHTML = renderMd(data.text);
+                  streamedText = data.text;
+                  flushRender();
                 } else if (data.text) {
                   // No streaming happened, render full text block
                   const p = document.createElement('div'); p.className = 'streamed-text'; p.innerHTML = renderMd(data.text); bubble.appendChild(p);
+                  scrollToBottom();
                 }
-                scrollToBottom();
-                streamedText = ''; lastDeltaNode = null;
+                streamedText = ''; lastDeltaNode = null; lastRenderLen = 0;
                 break;
               case 'thinking':
                 removeLoading();
@@ -782,15 +800,17 @@ async function sendMessage() {
                 break;
               case 'tool_use':
                 removeLoading();
+                flushRender(); // finalize any pending text before tool block
                 setStatus('busy', `Tool: ${data.name}`);
                 addToolBlock(bubble, data.name, data.input);
-                streamedText = ''; lastDeltaNode = null; currentThinkingBlock = null;
+                streamedText = ''; lastDeltaNode = null; lastRenderLen = 0; currentThinkingBlock = null;
                 break;
               case 'tool_progress':
                 setStatus('busy', `Tool: ${data.tool_name}`);
                 break;
               case 'result':
                 removeLoading();
+                flushRender(); // finalize any pending text
                 setStatus('', 'Done');
                 if (data.result && !bubble.querySelector('.streamed-text') && bubble.children.length === 0) {
                   const p = document.createElement('div'); p.innerHTML = renderMd(data.result); bubble.appendChild(p);
