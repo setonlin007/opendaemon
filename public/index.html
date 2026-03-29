@@ -460,7 +460,7 @@ async function sendMessage() {
   } catch (err) {
     if (err.name !== 'AbortError') {
       removeLoading();
-      const isNetworkError = err.message.includes('network') || err.message.includes('Failed to fetch') || err.name === 'TypeError';
+      const isNetworkError = err.message.includes('network') || err.message.includes('Failed to fetch') || err.message.includes('Load failed') || err.name === 'TypeError';
       if (isNetworkError) {
         bubble.innerHTML += `<p style="color:#f87171;">Connection lost. The server may have restarted.</p><button onclick="location.reload()" style="margin-top:8px;padding:6px 16px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;">Reload</button>`;
       } else {

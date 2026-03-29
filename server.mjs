@@ -186,6 +186,12 @@ const server = http.createServer(async (req, res) => {
       sendSSE(res, event, data);
     };
 
+    // Heartbeat to prevent mobile browsers from dropping the SSE connection
+    const heartbeat = setInterval(() => {
+      if (closed) return;
+      res.write(": heartbeat\n\n");
+    }, 15000);
+
     console.log(`[chat] ${conv.id} engine=${conv.engine_id} prompt="${body.prompt.substring(0, 50)}"`);
 
     try {
@@ -202,6 +208,7 @@ const server = http.createServer(async (req, res) => {
         onEvent("error", { message: err.message });
       }
     } finally {
+      clearInterval(heartbeat);
       onEvent("done", {});
       if (!closed) res.end();
     }
