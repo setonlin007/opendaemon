@@ -10,6 +10,11 @@ import { createAuth } from "./lib/auth.mjs";
 import { streamClaude, fetchCommands } from "./lib/engine-claude.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
 import { MCPManager } from "./lib/mcp-manager.mjs";
+import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
+import { initKnowledge, listKnowledge, getKnowledgeContent, updateKnowledge, deleteKnowledge } from "./lib/knowledge.mjs";
+import { buildInjectedContext } from "./lib/injector.mjs";
+import { loadGoals, saveGoals, prepareReflection, processReflectionResult, getPendingInsights, acceptPendingInsight, rejectPendingInsight } from "./lib/reflect.mjs";
+import { initEvolution, onChatComplete, onFeedback, getEvolutionState, getEvolutionLog, getEvolutionStats } from "./lib/evolution.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +33,8 @@ const config = loadConfig();
 const PORT = process.env.PORT || config.server?.port || 3456;
 const HOST = process.env.HOST || config.server?.host || "127.0.0.1";
 initDb();
+initKnowledge();
+initEvolution(config.evolution || {});
 const auth = createAuth(config.auth.password);
 
 // ── MCP Manager (long-running Python subprocess) ──
@@ -157,6 +164,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Feedback & Traces ──
+
+  if (method === "POST" && path.match(/^\/api\/messages\/\d+\/feedback$/)) {
+    const msgId = parseInt(path.split("/")[3]);
+    const body = await readBody(req);
+    if (!body?.feedback || !["up", "down"].includes(body.feedback)) {
+      json(res, { error: "feedback must be 'up' or 'down'" }, 400);
+      return;
+    }
+    const result = updateTraceFeedback(msgId, body.feedback, body.note || null);
+    if (!result) { json(res, { error: "trace not found for this message" }, 404); return; }
+    onFeedback(msgId, body.feedback);
+    json(res, { ok: true });
+    return;
+  }
+
+  if (method === "GET" && path === "/api/traces") {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const since = url.searchParams.get("since") ? parseInt(url.searchParams.get("since")) : undefined;
+    const limit = url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit")) : 50;
+    json(res, getTraces({ since, limit }));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/traces/stats") {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const since = url.searchParams.get("since") ? parseInt(url.searchParams.get("since")) : null;
+    json(res, getTraceStats(since));
+    return;
+  }
+
   // ── Chat (SSE streaming) ──
 
   if (method === "POST" && path === "/api/chat") {
@@ -175,6 +213,12 @@ const server = http.createServer(async (req, res) => {
     // Save user message
     addMessage(conv.id, "user", body.prompt);
 
+    // Build injected context from knowledge base
+    const injectDisabled = body.inject_knowledge === false;
+    const injection = injectDisabled
+      ? { context: "", knowledgeIds: [] }
+      : buildInjectedContext(body.prompt, { maxTokens: config.evolution?.inject_max_tokens || 2000, convId: conv.id });
+
     // Start SSE
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -190,8 +234,27 @@ const server = http.createServer(async (req, res) => {
       abortController.abort();
     });
 
+    // Trace capture state
+    const traceData = {
+      toolsCalled: [],
+      usage: null,
+      startTime: Date.now(),
+      assistantMsgId: null,
+      resultText: "",
+    };
+
     const onEvent = (event, data) => {
       if (closed) return;
+      // Capture trace data from events
+      if (event === "tool_use") {
+        traceData.toolsCalled.push({ name: data.name, start: Date.now() });
+      }
+      if (event === "result" && data.usage) {
+        traceData.usage = data.usage;
+      }
+      if (event === "result" && data.result) {
+        traceData.resultText = data.result;
+      }
       sendSSE(res, event, data);
     };
 
@@ -205,9 +268,11 @@ const server = http.createServer(async (req, res) => {
 
     try {
       if (engine.type === "claude-sdk") {
-        await handleClaudeChat(conv, engine, body.prompt, onEvent, abortController.signal);
+        const result = await handleClaudeChat(conv, engine, body.prompt, onEvent, abortController.signal, injection.context);
+        traceData.assistantMsgId = result?.msgId;
       } else if (engine.type === "openai") {
-        await handleOpenAIChat(conv, engine, body.prompt, onEvent, abortController.signal);
+        const result = await handleOpenAIChat(conv, engine, body.prompt, onEvent, abortController.signal, injection.context);
+        traceData.assistantMsgId = result?.msgId;
       } else {
         onEvent("error", { message: `Unknown engine type: ${engine.type}` });
       }
@@ -218,9 +283,214 @@ const server = http.createServer(async (req, res) => {
       }
     } finally {
       clearInterval(heartbeat);
-      onEvent("done", {});
+
+      // Record trace
+      try {
+        const duration = Date.now() - traceData.startTime;
+        const usage = traceData.usage || {};
+        const inputTokens = usage.input_tokens || usage.prompt_tokens || null;
+        const outputTokens = usage.output_tokens || usage.completion_tokens || null;
+
+        // Estimate cost based on engine pricing config (if available)
+        const pricing = engine.provider?.pricing;
+        let estimatedCost = null;
+        if (pricing && inputTokens != null && outputTokens != null) {
+          estimatedCost = (inputTokens / 1e6) * (pricing.input || 0) + (outputTokens / 1e6) * (pricing.output || 0);
+        }
+
+        addTrace({
+          conv_id: conv.id,
+          msg_id: traceData.assistantMsgId || null,
+          engine_id: conv.engine_id,
+          prompt_summary: body.prompt.substring(0, 200),
+          tools_used: traceData.toolsCalled,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          estimated_cost: estimatedCost,
+          response_len: (traceData.resultText || "").length,
+          duration_ms: duration,
+          injected_knowledge: injection.knowledgeIds.length > 0 ? injection.knowledgeIds : null,
+        });
+        // Notify evolution manager
+        onChatComplete(conv.id);
+      } catch (traceErr) {
+        console.error("[trace] failed to record:", traceErr.message);
+      }
+
+      onEvent("done", { msg_id: traceData.assistantMsgId || null });
       if (!closed) res.end();
     }
+    return;
+  }
+
+  // ── Knowledge routes ──
+
+  if (method === "GET" && path === "/api/knowledge") {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const category = url.searchParams.get("category") || null;
+    json(res, listKnowledge(category));
+    return;
+  }
+
+  if (method === "GET" && path.match(/^\/api\/knowledge\/\d+$/)) {
+    const id = parseInt(path.split("/")[3]);
+    const entry = getKnowledgeContent(id);
+    if (!entry) { json(res, { error: "not found" }, 404); return; }
+    json(res, entry);
+    return;
+  }
+
+  if (method === "PUT" && path.match(/^\/api\/knowledge\/\d+$/)) {
+    const id = parseInt(path.split("/")[3]);
+    const body = await readBody(req);
+    const result = updateKnowledge(id, body);
+    if (!result) { json(res, { error: "not found" }, 404); return; }
+    json(res, result);
+    return;
+  }
+
+  if (method === "DELETE" && path.match(/^\/api\/knowledge\/\d+$/)) {
+    const id = parseInt(path.split("/")[3]);
+    const result = deleteKnowledge(id);
+    if (!result) { json(res, { error: "not found" }, 404); return; }
+    json(res, result);
+    return;
+  }
+
+  // ── Goals routes ──
+
+  if (method === "GET" && path === "/api/goals") {
+    json(res, { content: loadGoals() });
+    return;
+  }
+
+  if (method === "PUT" && path === "/api/goals") {
+    const body = await readBody(req);
+    if (!body?.content) { json(res, { error: "content required" }, 400); return; }
+    saveGoals(body.content);
+    json(res, { ok: true });
+    return;
+  }
+
+  // ── Reflection routes ──
+
+  if (method === "POST" && path === "/api/reflect") {
+    const body = await readBody(req);
+    const engineId = body?.engine_id || config.evolution?.reflection_engine || config.engines[0]?.id;
+    const engine = getEngineById(engineId);
+    if (!engine) { json(res, { error: "engine not found" }, 400); return; }
+
+    const prep = prepareReflection(body?.limit || 100);
+    if (prep.traceCount === 0) {
+      json(res, { error: "no traces to reflect on" }, 400);
+      return;
+    }
+
+    // Stream reflection via SSE
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    });
+
+    const abortController = new AbortController();
+    req.on("close", () => abortController.abort());
+
+    let fullText = "";
+    let usage = null;
+
+    const reflectOnEvent = (event, data) => {
+      if (event === "delta" && data.text) {
+        fullText += data.text;
+        sendSSE(res, "delta", data);
+      }
+      if (event === "result") {
+        if (data.result) fullText = data.result;
+        usage = data.usage;
+      }
+    };
+
+    try {
+      if (engine.type === "claude-sdk") {
+        await streamClaude({ prompt: prep.prompt, convId: null, mcpServers: {}, onEvent: reflectOnEvent, abortSignal: abortController.signal });
+      } else if (engine.type === "openai") {
+        const messages = [{ role: "user", content: prep.prompt }];
+        await streamOpenAI({ messages, engineConfig: engine, onEvent: reflectOnEvent, abortSignal: abortController.signal });
+      }
+
+      const inputTokens = usage?.input_tokens || usage?.prompt_tokens || null;
+      const outputTokens = usage?.output_tokens || usage?.completion_tokens || null;
+      const pricing = engine.provider?.pricing;
+      let cost = null;
+      if (pricing && inputTokens && outputTokens) {
+        cost = (inputTokens / 1e6) * (pricing.input || 0) + (outputTokens / 1e6) * (pricing.output || 0);
+      }
+
+      const result = processReflectionResult(fullText, {
+        engineId,
+        traceStart: prep.traceStart,
+        traceEnd: prep.traceEnd,
+        traceCount: prep.traceCount,
+        triggerReason: body?.trigger_reason || "manual",
+        tokens: (inputTokens || 0) + (outputTokens || 0),
+        cost,
+      });
+
+      sendSSE(res, "done", {
+        reflection_id: result.reflectionId,
+        insight_count: result.insights.length,
+        auto_accepted: result.autoAccepted,
+        pending: result.pending,
+      });
+    } catch (err) {
+      sendSSE(res, "error", { message: err.message });
+    }
+
+    res.end();
+    return;
+  }
+
+  // ── Evolution routes ──
+
+  if (method === "GET" && path === "/api/evolution/status") {
+    json(res, getEvolutionState());
+    return;
+  }
+
+  if (method === "GET" && path === "/api/evolution/pending") {
+    json(res, getPendingInsights());
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/evolution\/pending\/\d+\/accept$/)) {
+    const id = parseInt(path.split("/")[4]);
+    const result = acceptPendingInsight(id);
+    if (!result) { json(res, { error: "not found or already processed" }, 404); return; }
+    json(res, result);
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/evolution\/pending\/\d+\/reject$/)) {
+    const id = parseInt(path.split("/")[4]);
+    const result = rejectPendingInsight(id);
+    if (!result) { json(res, { error: "not found or already processed" }, 404); return; }
+    json(res, result);
+    return;
+  }
+
+  if (method === "GET" && path === "/api/evolution/log") {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const type = url.searchParams.get("type") || undefined;
+    const since = url.searchParams.get("since") ? parseInt(url.searchParams.get("since")) : undefined;
+    const limit = url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit")) : 50;
+    json(res, getEvolutionLog({ type, since, limit }));
+    return;
+  }
+
+  if (method === "GET" && path === "/api/evolution/stats") {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const since = url.searchParams.get("since") ? parseInt(url.searchParams.get("since")) : null;
+    json(res, getEvolutionStats(since));
     return;
   }
 
@@ -252,7 +522,7 @@ const server = http.createServer(async (req, res) => {
 
 // ── Engine handlers ──
 
-async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal) {
+async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal, injectedContext = "") {
   // Build MCP servers from config
   const mcpServers = {};
   const mcpConfig = config.mcp || {};
@@ -294,6 +564,7 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal) {
     convId: conv.id,
     sdkSessionId: conv.sdk_session,
     mcpServers,
+    injectedContext,
     onEvent: wrappedOnEvent,
     abortSignal,
   });
@@ -303,12 +574,18 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal) {
   updateMessageContent(msg.id, finalText);
 
   if (sessionId) updateConversationSdkSession(conv.id, sessionId);
+  return { msgId: msg.id };
 }
 
-async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal) {
+async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal, injectedContext = "") {
   // Build messages array from history (exclude placeholder "..." messages)
   const history = getMessages(conv.id);
   const messages = history.filter((m) => m.content !== "...").map((m) => ({ role: m.role, content: m.content }));
+
+  // Inject learned context as system message
+  if (injectedContext) {
+    messages.unshift({ role: "system", content: injectedContext });
+  }
 
   // Build tools from MCP Manager (long-running process)
   const { tools, onToolCall } = await buildMCPTools();
@@ -345,6 +622,7 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal) {
   // Final update with complete text
   const finalText = resultText || streamedText || "...";
   updateMessageContent(msg.id, finalText);
+  return { msgId: msg.id };
 }
 
 /**

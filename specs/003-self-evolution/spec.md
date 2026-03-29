@@ -50,6 +50,42 @@ As the daemon operator, I want to trigger reflection that analyzes recent traces
 - Insights presented for user review before saving
 - Reflection guided by `data/goals.md` if it exists
 
+#### Reflection Trigger Strategies
+
+Reflection requires an LLM call, so frequency directly impacts cost. Users choose a strategy in config:
+
+| Strategy | Trigger | LLM Calls/Month | Cost Level | Suitable For |
+|----------|---------|-----------------|------------|-------------|
+| **manual** | Only when user clicks "Reflect" or calls MCP tool | 0 (user-controlled) | Free | Cost-conscious users; getting started |
+| **conservative** | Weekly (default: Sunday 02:00) | ~4 | Low | Light users (<50 conversations/week) |
+| **balanced** | Daily (default: 02:00) + after 3 cumulative "bad" feedbacks | ~35 | Medium | Regular users; recommended default |
+| **aggressive** | After every N conversations (default N=5) + daily | ~60+ | High | Power users who want fastest learning |
+| **custom** | User-defined cron expression + threshold rules | Varies | Varies | Advanced users |
+
+Config structure (`config.json`):
+```json
+{
+  "evolution": {
+    "reflection_strategy": "balanced",
+    "reflection_engine": "claude-opus",
+    "reflection_schedule": "daily 02:00",
+    "reflection_bad_feedback_threshold": 3,
+    "reflection_conversation_threshold": 5,
+    "inject_max_tokens": 2000,
+    "trace_enabled": true
+  }
+}
+```
+
+Strategy behavior:
+- **manual**: No automatic triggers. User uses UI button or `reflect` MCP tool.
+- **conservative**: Creates a weekly cron. Analyzes all traces since last reflection.
+- **balanced**: Daily cron + event-driven: when cumulative bad feedbacks since last reflection reach threshold, auto-trigger. Resets counter after reflection.
+- **aggressive**: Checks after each conversation completes; triggers when N new conversations since last reflection. Also runs daily cron as safety net.
+- **custom**: User sets `reflection_schedule` (cron expression) and optionally `reflection_bad_feedback_threshold` and `reflection_conversation_threshold`.
+
+All strategies except **manual** auto-accept insights with confidence >= 0.9 and present the rest for user review next time they open the UI. This avoids blocking on user approval for high-confidence patterns.
+
 ### US-4: Knowledge Base
 
 As a user, I want to view, edit, and delete learned knowledge, with full control over what the daemon "remembers."
@@ -80,6 +116,6 @@ As a user, I want to define growth goals so reflection focuses on what matters t
 
 1. **Markdown + SQLite index** -- CONSTITUTION mandates human-readable, file-based memory. Markdown is source of truth; SQLite index is for retrieval.
 2. **No vector search** -- Tag-based matching sufficient for single-user scale. Debuggable, no extra deps.
-3. **On-demand reflection** -- User controls when reflection runs and reviews insights before saving.
+3. **Tiered reflection strategies** -- Five trigger strategies (manual/conservative/balanced/aggressive/custom) let users trade off learning speed vs LLM cost. Default: balanced (daily + bad-feedback-driven).
 4. **System prompt injection** -- Knowledge base is small enough to fit in system prompt. Works identically across both engine types.
 5. **Same engine for reflection** -- Reuses existing engine infrastructure. No new config needed.

@@ -31,11 +31,16 @@ opendaemon/
 ├── server.mjs            # Main server: routing, auth, engine dispatch
 ├── lib/
 │   ├── config.mjs        # Config loader + validation + cache
-│   ├── db.mjs            # SQLite schema + CRUD (conversations, messages)
+│   ├── db.mjs            # SQLite schema + CRUD (conversations, messages, traces, knowledge, evolution)
 │   ├── auth.mjs          # Cookie-based auth (HMAC-signed tokens)
-│   ├── engine-claude.mjs # Claude Agent SDK adapter
+│   ├── engine-claude.mjs # Claude Agent SDK adapter (accepts injected context)
 │   ├── engine-openai.mjs # OpenAI-compatible adapter (streaming + function calling)
-│   └── mcp-manager.mjs   # Long-running MCP subprocess manager (JSON-RPC over stdio)
+│   ├── mcp-manager.mjs   # Long-running MCP subprocess manager (JSON-RPC over stdio)
+│   ├── trace.mjs         # Trace capture + query + evolution_log helper
+│   ├── knowledge.mjs     # Knowledge CRUD (Markdown files + SQLite index)
+│   ├── injector.mjs      # Build augmented context from knowledge for injection
+│   ├── reflect.mjs       # Reflection engine: build prompt, parse insights, manage pending
+│   └── evolution.mjs     # Evolution trigger manager (strategy-based reflection scheduling)
 ├── public/
 │   ├── index.html        # Main UI (sidebar + chat + engine switching)
 │   └── login.html        # Login page
@@ -56,9 +61,18 @@ opendaemon/
 │   │   ├── reminder.py   # One-time scheduled reminders
 │   │   └── cron_task.py  # Periodic scheduled tasks
 │   └── data/             # Runtime data (gitignored)
+├── data/                 # Runtime data (gitignored)
+│   ├── opendaemon.db     # SQLite database (conversations, messages, traces, knowledge_index, reflections, pending_insights, evolution_log, evolution_state)
+│   ├── goals.md          # User-defined growth goals (guides reflection)
+│   └── knowledge/        # Human-readable learned knowledge (Markdown)
+│       ├── preferences.md
+│       ├── patterns.md
+│       ├── domain.md
+│       └── rules.md
 └── specs/                # Spec-driven development artifacts
     ├── 001-platform-foundation/
-    └── 002-mcp-capability-layer/
+    ├── 002-mcp-capability-layer/
+    └── 003-self-evolution/
 ```
 
 ## Architecture
@@ -94,6 +108,30 @@ engine-claude    engine-openai
                               (WeChat/Feishu/Bark)
 ```
 
+### Self-Evolution Loop (Phase 2)
+
+```
+Chat Flow (augmented):
+  User prompt → injector.mjs (load goals + match knowledge) → augmented system prompt
+       → engine → response + SSE stream
+       → trace.mjs (capture tokens, tools, timing → traces table)
+       → evolution.mjs (increment counters, check thresholds)
+
+Reflection Flow (on-demand or scheduled):
+  reflect.mjs (load traces + goals + existing knowledge)
+       → build reflection prompt → send to LLM
+       → parse insights → auto-accept (confidence ≥ 0.9) or queue for review
+       → write to knowledge/*.md + knowledge_index table
+       → log to evolution_log table
+
+Trigger Strategies:
+  manual → user clicks "Reflect" button
+  conservative → weekly cron
+  balanced → daily cron + bad feedback threshold (default 3)
+  aggressive → per-conversation threshold (default 5) + daily cron
+  custom → user-defined schedule + thresholds
+```
+
 ### Engine Types
 
 | Type | Adapter | How it works |
@@ -120,8 +158,17 @@ event: done            data: {}
 ### Database Schema
 
 ```sql
+-- Phase 0
 conversations (id TEXT PK, title, engine_id, sdk_session, created_at, updated_at)
 messages (id INTEGER PK, conv_id FK, role, content, metadata JSON, created_at)
+
+-- Phase 2: Self-Evolution
+traces (id INTEGER PK, conv_id FK, msg_id FK, engine_id, prompt_summary, tools_used JSON, input_tokens, output_tokens, estimated_cost, response_len, duration_ms, feedback, feedback_note, injected_knowledge JSON, created_at)
+knowledge_index (id INTEGER PK, category, title, tags, file_path, line_start, line_end, source_type, confidence, created_at, updated_at)
+reflections (id INTEGER PK, engine_id, trace_start, trace_end, trace_count, insights_raw, insights_accepted, insights_auto_accepted, trigger_reason, reflection_tokens, reflection_cost, created_at)
+pending_insights (id INTEGER PK, reflection_id FK, category, title, tags, content, confidence, status, created_at)
+evolution_log (id INTEGER PK, event_type, event_data JSON, created_at)
+evolution_state (id=1, last_reflection_at, bad_feedback_since_last, conv_since_last, updated_at)
 ```
 
 ### Config Structure (`config.json`)
@@ -224,8 +271,8 @@ Small changes (bug fixes, config additions) skip SDD and go directly to implemen
 
 - **Phase 0**: Platform foundation (DONE) — multi-engine, auth, sessions, web UI
 - **Phase 1**: MCP capability layer (DONE) — Python MCP Server with web_search, send_message, notify, reminder, cron_task
-- **Phase 2**: Self-evolution — trace → reflect → learn → inject loop
-- **Phase 3**: Advanced harness — sub-agents, evaluator, prompt optimization
+- **Phase 2**: Self-evolution (DONE) — trace capture, knowledge base (Markdown + SQLite), context injection, reflection engine, evolution trigger strategies (manual/conservative/balanced/aggressive/custom), feedback UI, knowledge/goals/reflect panel
+- **Phase 3**: Advanced harness — sub-agents, evaluator, prompt optimization, self-coding
 
 ## Origins
 

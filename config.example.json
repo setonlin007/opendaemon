@@ -36,6 +36,14 @@
       }
     }
   ],
+  "evolution": {
+    "reflection_strategy": "balanced",
+    "reflection_engine": "claude-opus",
+    "reflection_bad_feedback_threshold": 3,
+    "reflection_conversation_threshold": 5,
+    "inject_max_tokens": 2000,
+    "trace_enabled": true
+  },
   "mcp": {
     "opendaemon": {
       "command": "mcp/.venv/bin/python",
