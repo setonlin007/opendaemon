@@ -11,6 +11,8 @@ import { streamClaude, fetchCommands } from "./lib/engine-claude.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
 import { MCPManager } from "./lib/mcp-manager.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
+import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST } from "./lib/attachments.mjs";
+import { parseMultipart } from "./lib/multipart.mjs";
 import { initKnowledge, listKnowledge, getKnowledgeContent, updateKnowledge, deleteKnowledge } from "./lib/knowledge.mjs";
 import { buildInjectedContext } from "./lib/injector.mjs";
 import { loadGoals, saveGoals, prepareReflection, processReflectionResult, getPendingInsights, acceptPendingInsight, rejectPendingInsight, getReflectionHistory } from "./lib/reflect.mjs";
@@ -33,6 +35,7 @@ const config = loadConfig();
 const PORT = process.env.PORT || config.server?.port || 3456;
 const HOST = process.env.HOST || config.server?.host || "127.0.0.1";
 initDb();
+initUploads();
 initKnowledge();
 initEvolution(config.evolution || {});
 const auth = createAuth(config.auth.password);
@@ -152,6 +155,8 @@ const server = http.createServer(async (req, res) => {
   if (method === "DELETE" && path.startsWith("/api/conversations/")) {
     const id = extractParam(req.url, "/api/conversations/");
     if (!id) { json(res, { error: "id required" }, 400); return; }
+    // Clean up attachment files before DB cascade delete
+    try { deleteAttachmentFiles(id); } catch {}
     deleteConversation(id);
     json(res, { ok: true });
     return;
@@ -160,7 +165,15 @@ const server = http.createServer(async (req, res) => {
   if (method === "GET" && path.match(/^\/api\/conversations\/[^/]+\/messages$/)) {
     const id = extractParam(req.url, "/api/conversations/");
     if (!id) { json(res, { error: "id required" }, 400); return; }
-    json(res, getMessages(id));
+    const msgs = getMessages(id);
+    // Enrich messages with attachment metadata
+    const msgIds = msgs.map((m) => m.id);
+    const attMap = getAttachmentsForMessages(msgIds);
+    const enriched = msgs.map((m) => {
+      const atts = attMap.get(m.id);
+      return atts ? { ...m, attachments: atts } : m;
+    });
+    json(res, enriched);
     return;
   }
 
@@ -195,12 +208,58 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── File Upload routes ──
+
+  if (method === "POST" && path === "/api/upload") {
+    try {
+      const { fields, files } = await parseMultipart(req);
+      const convId = fields.conv_id;
+      if (!convId) { json(res, { error: "conv_id required" }, 400); return; }
+      const conv = getConversation(convId);
+      if (!conv) { json(res, { error: "conversation not found" }, 404); return; }
+      if (files.length === 0) { json(res, { error: "no files provided" }, 400); return; }
+      if (files.length > MAX_FILES_PER_REQUEST) { json(res, { error: `max ${MAX_FILES_PER_REQUEST} files per request` }, 400); return; }
+
+      const results = [];
+      for (const file of files) {
+        try {
+          const att = saveAttachment(convId, file.filename, file.contentType, file.data);
+          results.push(att);
+        } catch (err) {
+          results.push({ error: err.message, filename: file.filename });
+        }
+      }
+      json(res, results);
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+    return;
+  }
+
+  if (method === "GET" && path.match(/^\/api\/uploads\/[^/]+$/)) {
+    const id = path.split("/")[3];
+    const att = getAttachment(id);
+    if (!att) { res.writeHead(404); res.end("Not Found"); return; }
+    const buffer = getAttachmentBuffer(id);
+    if (!buffer) { res.writeHead(404); res.end("File not found on disk"); return; }
+    const disposition = att.category === "image" ? "inline" : `attachment; filename="${att.filename}"`;
+    res.writeHead(200, {
+      "Content-Type": att.mime_type,
+      "Content-Length": buffer.length,
+      "Content-Disposition": disposition,
+      "Cache-Control": "private, max-age=86400",
+    });
+    res.end(buffer);
+    return;
+  }
+
   // ── Chat (SSE streaming) ──
 
   if (method === "POST" && path === "/api/chat") {
     const body = await readBody(req);
-    if (!body?.conversation_id || !body?.prompt?.trim()) {
-      json(res, { error: "conversation_id and prompt required" }, 400);
+    const hasAttachments = body?.attachment_ids?.length > 0;
+    if (!body?.conversation_id || (!body?.prompt?.trim() && !hasAttachments)) {
+      json(res, { error: "conversation_id and prompt (or attachments) required" }, 400);
       return;
     }
 
@@ -210,8 +269,23 @@ const server = http.createServer(async (req, res) => {
     const engine = getEngineById(conv.engine_id);
     if (!engine) { json(res, { error: "engine not configured" }, 500); return; }
 
-    // Save user message
-    addMessage(conv.id, "user", body.prompt);
+    // Load attachments if present
+    const attachments = [];
+    if (hasAttachments) {
+      for (const attId of body.attachment_ids) {
+        const att = getAttachment(attId);
+        if (att && att.conv_id === conv.id) attachments.push(att);
+      }
+    }
+
+    // Save user message with attachment metadata
+    const msgMeta = attachments.length > 0 ? { attachments: attachments.map((a) => a.id) } : null;
+    const userMsg = addMessage(conv.id, "user", body.prompt || "", msgMeta);
+
+    // Link attachments to this message
+    if (attachments.length > 0) {
+      linkAttachmentsToMessage(attachments.map((a) => a.id), userMsg.id);
+    }
 
     // Build injected context from knowledge base
     const injectDisabled = body.inject_knowledge === false;
@@ -264,14 +338,15 @@ const server = http.createServer(async (req, res) => {
       res.write(": heartbeat\n\n");
     }, 15000);
 
-    console.log(`[chat] ${conv.id} engine=${conv.engine_id} prompt="${body.prompt.substring(0, 50)}"`);
+    const promptText = body.prompt || "";
+    console.log(`[chat] ${conv.id} engine=${conv.engine_id} attachments=${attachments.length} prompt="${promptText.substring(0, 50)}"`);
 
     try {
       if (engine.type === "claude-sdk") {
-        const result = await handleClaudeChat(conv, engine, body.prompt, onEvent, abortController.signal, injection.context);
+        const result = await handleClaudeChat(conv, engine, promptText, onEvent, abortController.signal, injection.context, attachments);
         traceData.assistantMsgId = result?.msgId;
       } else if (engine.type === "openai") {
-        const result = await handleOpenAIChat(conv, engine, body.prompt, onEvent, abortController.signal, injection.context);
+        const result = await handleOpenAIChat(conv, engine, promptText, onEvent, abortController.signal, injection.context, attachments);
         traceData.assistantMsgId = result?.msgId;
       } else {
         onEvent("error", { message: `Unknown engine type: ${engine.type}` });
@@ -302,7 +377,7 @@ const server = http.createServer(async (req, res) => {
           conv_id: conv.id,
           msg_id: traceData.assistantMsgId || null,
           engine_id: conv.engine_id,
-          prompt_summary: body.prompt.substring(0, 200),
+          prompt_summary: promptText.substring(0, 200),
           tools_used: traceData.toolsCalled,
           input_tokens: inputTokens,
           output_tokens: outputTokens,
@@ -539,7 +614,7 @@ const server = http.createServer(async (req, res) => {
 
 // ── Engine handlers ──
 
-async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal, injectedContext = "") {
+async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal, injectedContext = "", attachments = []) {
   // Build MCP servers from config
   const mcpServers = {};
   const mcpConfig = config.mcp || {};
@@ -576,8 +651,11 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal, inje
     onEvent(event, data);
   };
 
+  // Build multimodal prompt if attachments present
+  const effectivePrompt = attachments.length > 0 ? buildClaudeContent(prompt, attachments) : prompt;
+
   const { sessionId, resultText } = await streamClaude({
-    prompt,
+    prompt: effectivePrompt,
     convId: conv.id,
     sdkSessionId: conv.sdk_session,
     mcpServers,
@@ -594,10 +672,21 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal, inje
   return { msgId: msg.id };
 }
 
-async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal, injectedContext = "") {
+async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal, injectedContext = "", attachments = []) {
   // Build messages array from history (exclude placeholder "..." messages)
   const history = getMessages(conv.id);
-  const messages = history.filter((m) => m.content !== "...").map((m) => ({ role: m.role, content: m.content }));
+  // Enrich with attachment data for multimodal history reconstruction
+  const msgIds = history.map((m) => m.id);
+  const attMap = getAttachmentsForMessages(msgIds);
+
+  const messages = history.filter((m) => m.content !== "...").map((m) => {
+    const msgAtts = attMap.get(m.id);
+    if (msgAtts && msgAtts.length > 0 && m.role === "user") {
+      // Rebuild multimodal content for historical messages with attachments
+      return { role: m.role, content: buildOpenAIContent(m.content, msgAtts) };
+    }
+    return { role: m.role, content: m.content };
+  });
 
   // Inject learned context as system message
   if (injectedContext) {

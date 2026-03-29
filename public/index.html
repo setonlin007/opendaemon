@@ -124,7 +124,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 
 /* Tool blocks */
 .tool-block { background: var(--tool-bg); border: 1px solid var(--border); border-radius: 8px; margin: 8px 0; overflow: hidden; }
-.tool-header { padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--accent); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+.tool-header { padding: 6px 12px; font-size: 12px; font-weight: 600; color: #7aa2f7; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
 .tool-header::before { content: "\25B6"; font-size: 10px; margin-right: 6px; transition: transform 0.2s; display: inline-block; }
 .tool-block.expanded .tool-header::before { transform: rotate(90deg); }
 .tool-body { display: none; padding: 8px 12px; font-size: 12px; color: var(--text-2); font-family: monospace; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
@@ -154,7 +154,37 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .input-row button:hover { opacity: 0.85; }
 .input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
 .input-row button.stop { background: #dc3545; }
+.attach-btn { background: none !important; color: var(--text-3) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; padding: 8px 10px !important; font-size: 18px !important; line-height: 1; cursor: pointer; min-width: 42px; display: flex; align-items: center; justify-content: center; }
+.attach-btn:hover { color: var(--accent) !important; border-color: var(--accent) !important; }
 .input-hint { max-width: 900px; margin: 6px auto 0; font-size: 11px; color: var(--text-3); text-align: center; }
+
+/* Attachment preview */
+.attachment-preview { max-width: 900px; margin: 0 auto 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+.attachment-preview:empty { display: none; }
+.att-thumb { position: relative; display: inline-flex; align-items: center; background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.att-thumb img { height: 60px; max-width: 100px; object-fit: cover; display: block; }
+.att-thumb .att-file-chip { padding: 8px 12px; font-size: 12px; color: var(--text-2); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-thumb .att-file-chip .att-size { color: var(--text-3); font-size: 10px; margin-left: 4px; }
+.att-thumb .att-remove { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 12px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.att-thumb .att-remove:hover { background: #dc3545; }
+.att-thumb.uploading { opacity: 0.5; }
+.att-thumb.uploading::after { content: ''; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); }
+
+/* Drag & drop overlay */
+.main.drag-over::after { content: '📎 Drop files here'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); color: white; font-size: 20px; font-weight: 600; z-index: 50; border: 3px dashed var(--accent); pointer-events: none; }
+.main { position: relative; }
+
+/* Inline attachments in messages */
+.msg-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.msg-attachments img { max-width: 300px; max-height: 200px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); }
+.msg-attachments img:hover { opacity: 0.9; }
+.msg-att-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--tool-bg); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text-2); text-decoration: none; }
+.msg-att-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Image lightbox */
+.lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 300; align-items: center; justify-content: center; cursor: pointer; }
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 4px; }
 
 /* Autocomplete */
 .autocomplete { display: none; position: absolute; bottom: 100%; left: 0; right: 0; max-height: 260px; overflow-y: auto; background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; box-shadow: 0 -4px 16px rgba(0,0,0,0.4); z-index: 100; }
@@ -293,7 +323,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     <div class="welcome">Select or create a conversation to start</div>
   </div>
   <div class="input-area">
+    <div class="attachment-preview" id="attachmentPreview"></div>
     <div class="input-row">
+      <button class="attach-btn" id="attachBtn" onclick="triggerFileSelect()" title="Attach files">📎</button>
+      <input type="file" id="fileInput" multiple accept="image/*,text/*,.pdf,.json,.py,.js,.ts,.md,.csv,.xml,.yaml,.yml,.toml,.sh,.sql,.log,.cfg,.ini,.env,.jsx,.tsx,.vue,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.php,.swift,.kt" style="display:none" onchange="handleFileInput(this.files)">
       <div class="input-wrapper">
         <div class="autocomplete" id="autocomplete"></div>
         <textarea id="input" placeholder="Message OpenDaemon..." rows="1" disabled></textarea>
@@ -302,6 +335,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     </div>
     <div class="input-hint">Enter to send, Shift+Enter for newline</div>
   </div>
+  <!-- Image lightbox -->
+  <div class="lightbox" id="lightbox" onclick="this.classList.remove('open')"><img id="lightboxImg"></div>
 </main>
 
 <!-- Evolution Panel -->
@@ -333,6 +368,7 @@ let abortController = null;
 let allCommands = [];
 let wasBackgrounded = false;
 const unreadConvs = new Set();
+let pendingAttachments = []; // [{id, filename, mime_type, size_bytes, category, url}]
 
 const $ = (id) => document.getElementById(id);
 const messagesEl = $('messages');
@@ -453,7 +489,7 @@ async function selectConversation(id) {
     messagesEl.innerHTML = '<div class="welcome">Start a conversation</div>';
   } else {
     for (const m of msgs) {
-      if (m.role === 'user') addUserBubble(m.content);
+      if (m.role === 'user') addUserBubble(m.content, m.attachments);
       else if (m.content === '...') addStreamingBubble();
       else if (m.content.includes('<!-- streaming -->')) addStreamingBubble(m.content.replace('<!-- streaming -->', ''));
       else {
@@ -492,15 +528,162 @@ async function deleteConv(id) {
   renderConversations();
 }
 
+// ── File & Image Upload ──
+
+function triggerFileSelect() {
+  $('fileInput').click();
+}
+
+function handleFileInput(fileList) {
+  if (!fileList || fileList.length === 0) return;
+  handleFiles(Array.from(fileList));
+  $('fileInput').value = ''; // reset so same file can be re-selected
+}
+
+async function handleFiles(files) {
+  if (!currentConvId) return;
+  const maxFiles = 5;
+  const remaining = maxFiles - pendingAttachments.length;
+  if (remaining <= 0) { alert('Max 5 attachments per message'); return; }
+  const toProcess = files.slice(0, remaining);
+
+  for (const file of toProcess) {
+    // Validate size
+    if (file.size > 10 * 1024 * 1024) { alert(`${file.name} is too large (max 10MB)`); continue; }
+
+    // Client-side image compression
+    let uploadFile = file;
+    if (file.type.startsWith('image/') && file.size > 1024 * 1024) {
+      try { uploadFile = await compressImage(file); } catch { uploadFile = file; }
+    }
+
+    // Create preview element
+    const thumbId = 'att_' + Math.random().toString(36).substring(2, 8);
+    const thumbEl = document.createElement('div');
+    thumbEl.className = 'att-thumb uploading';
+    thumbEl.id = thumbId;
+    if (file.type.startsWith('image/')) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      thumbEl.appendChild(img);
+    } else {
+      const chip = document.createElement('span');
+      chip.className = 'att-file-chip';
+      chip.innerHTML = `📄 ${esc(file.name)}<span class="att-size">${formatSize(file.size)}</span>`;
+      thumbEl.appendChild(chip);
+    }
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'att-remove';
+    removeBtn.innerHTML = '×';
+    removeBtn.onclick = () => removeAttachment(thumbId);
+    thumbEl.appendChild(removeBtn);
+    $('attachmentPreview').appendChild(thumbEl);
+
+    // Upload
+    try {
+      const formData = new FormData();
+      formData.append('conv_id', currentConvId);
+      formData.append('file', uploadFile, file.name);
+      const resp = await fetch('/api/upload', { method: 'POST', body: formData });
+      const results = await resp.json();
+      if (results[0]?.error) throw new Error(results[0].error);
+      const att = results[0];
+      att._thumbId = thumbId;
+      pendingAttachments.push(att);
+      thumbEl.classList.remove('uploading');
+    } catch (err) {
+      thumbEl.remove();
+      alert(`Upload failed: ${err.message}`);
+    }
+  }
+}
+
+function removeAttachment(thumbId) {
+  const el = document.getElementById(thumbId);
+  if (el) el.remove();
+  pendingAttachments = pendingAttachments.filter(a => a._thumbId !== thumbId);
+}
+
+function clearAttachments() {
+  pendingAttachments = [];
+  $('attachmentPreview').innerHTML = '';
+}
+
+async function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const MAX_DIM = 1600;
+        let w = img.width, h = img.height;
+        if (w > MAX_DIM || h > MAX_DIM) {
+          const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          else reject(new Error('compression failed'));
+        }, 'image/jpeg', 0.85);
+      } catch (e) { reject(e); }
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + 'KB';
+  return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+}
+
+function renderAttachmentsInBubble(container, attachments) {
+  if (!attachments || attachments.length === 0) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-attachments';
+  for (const att of attachments) {
+    if (att.category === 'image') {
+      const img = document.createElement('img');
+      img.src = att.url;
+      img.alt = att.filename;
+      img.loading = 'lazy';
+      img.onclick = () => openLightbox(att.url);
+      wrap.appendChild(img);
+    } else {
+      const a = document.createElement('a');
+      a.className = 'msg-att-chip';
+      a.href = att.url;
+      a.target = '_blank';
+      a.innerHTML = `📄 ${esc(att.filename)} <span style="color:var(--text-3);font-size:10px">${formatSize(att.size_bytes)}</span>`;
+      wrap.appendChild(a);
+    }
+  }
+  container.appendChild(wrap);
+}
+
+function openLightbox(url) {
+  const lb = $('lightbox');
+  $('lightboxImg').src = url;
+  lb.classList.add('open');
+}
+
 // ── Chat ──
 async function sendMessage() {
   const text = inputEl.value.trim();
-  if (!text || isStreaming || !currentConvId) return;
+  const hasAttachments = pendingAttachments.length > 0;
+  if ((!text && !hasAttachments) || isStreaming || !currentConvId) return;
   hideAutocomplete();
 
-  addUserBubble(text);
+  const sendAttachments = [...pendingAttachments];
+  addUserBubble(text, sendAttachments);
   inputEl.value = '';
   inputEl.style.height = 'auto';
+  clearAttachments();
 
   isStreaming = true;
   sendBtn.textContent = 'Stop';
@@ -532,7 +715,7 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversation_id: currentConvId, prompt: text }),
+      body: JSON.stringify({ conversation_id: currentConvId, prompt: text, attachment_ids: sendAttachments.map(a => a.id) }),
       signal: abortController.signal,
     });
 
@@ -690,10 +873,12 @@ function scrollToBottom() { requestAnimationFrame(() => { messagesEl.scrollTop =
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ── Bubble helpers ──
-function addUserBubble(text) {
+function addUserBubble(text, attachments) {
   const w = messagesEl.querySelector('.welcome'); if (w) w.remove();
   const div = document.createElement('div'); div.className = 'message user';
-  div.innerHTML = `<button class="msg-copy" onclick="copyMsg(this)">Copy</button><div class="bubble">${esc(text)}</div>`;
+  div.innerHTML = `<button class="msg-copy" onclick="copyMsg(this)">Copy</button><div class="bubble">${text ? esc(text) : ''}</div>`;
+  const bubble = div.querySelector('.bubble');
+  if (attachments && attachments.length > 0) renderAttachmentsInBubble(bubble, attachments);
   messagesEl.appendChild(div); scrollToBottom();
 }
 function addAssistantBubble(text) {
@@ -854,6 +1039,29 @@ inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); hideAutocomplete(); return; }
   }
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(); }
+});
+
+// ── Drag & Drop ──
+const mainEl = document.querySelector('.main');
+mainEl.addEventListener('dragover', (e) => { e.preventDefault(); mainEl.classList.add('drag-over'); });
+mainEl.addEventListener('dragleave', (e) => { if (e.relatedTarget && mainEl.contains(e.relatedTarget)) return; mainEl.classList.remove('drag-over'); });
+mainEl.addEventListener('drop', (e) => { e.preventDefault(); mainEl.classList.remove('drag-over'); if (e.dataTransfer?.files?.length > 0 && currentConvId) handleFiles(Array.from(e.dataTransfer.files)); });
+
+// ── Paste image from clipboard ──
+inputEl.addEventListener('paste', (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  const imageFiles = [];
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) imageFiles.push(file);
+    }
+  }
+  if (imageFiles.length > 0 && currentConvId) {
+    e.preventDefault();
+    handleFiles(imageFiles);
+  }
 });
 
 // ── Mobile sidebar ──
