@@ -1100,7 +1100,37 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-
+// ── Server health check (detect restart and auto-reload) ──
+let healthCheckTimer = null;
+function startHealthCheck() {
+  if (healthCheckTimer) return;
+  healthCheckTimer = setInterval(async () => {
+    if (isStreaming) return; // don't interfere with active chat
+    try {
+      const r = await fetch('/api/engines', { signal: AbortSignal.timeout(3000) });
+      if (!r.ok && r.status === 401) {
+        // Session lost after restart — reload to login
+        clearInterval(healthCheckTimer);
+        location.reload();
+      }
+    } catch {
+      // Server unreachable — it's restarting. Poll until it's back.
+      clearInterval(healthCheckTimer);
+      healthCheckTimer = null;
+      const poll = async () => {
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          try {
+            const r = await fetch('/api/engines', { signal: AbortSignal.timeout(3000) });
+            if (r.ok || r.status === 401) { location.reload(); return; }
+          } catch {}
+        }
+      };
+      poll();
+    }
+  }, 5000);
+}
+startHealthCheck();
 
 // ── Evolution Panel ──
 let currentEvoTab = 'knowledge';
