@@ -329,7 +329,11 @@ async function selectConversation(id) {
   sessionInfo.textContent = '';
   inputEl.disabled = false;
   sendBtn.disabled = false;
-  renderConversations();
+
+  // Update active state without rebuilding DOM
+  document.querySelectorAll('.conv-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('onclick')?.includes(id));
+  });
 
   // Load messages
   const msgs = await api('GET', `/api/conversations/${id}/messages`);
@@ -643,7 +647,7 @@ inputEl.addEventListener('keydown', (e) => {
     if ((e.key === 'Tab' || e.key === 'Enter') && selectedIdx >= 0) { e.preventDefault(); pickCmd(items[selectedIdx].dataset.name); return; }
     if (e.key === 'Escape') { e.preventDefault(); hideAutocomplete(); return; }
   }
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(); }
 });
 
 // ── Mobile sidebar ──
