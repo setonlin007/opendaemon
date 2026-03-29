@@ -748,11 +748,23 @@ async function sendMessage() {
                 streamedText += data.text;
                 if (!lastDeltaNode) { lastDeltaNode = document.createElement('div'); lastDeltaNode.className = 'streamed-text'; bubble.appendChild(lastDeltaNode); }
                 lastDeltaNode.innerHTML = renderMd(streamedText);
-                scrollToBottom();
+                // Throttle scroll during streaming to avoid jank
+                const now = Date.now();
+                if (!sendMessage._lastScroll || now - sendMessage._lastScroll > 100) {
+                  sendMessage._lastScroll = now;
+                  scrollToBottom();
+                }
                 break;
               case 'text':
                 removeLoading();
-                if (!streamedText) { const p = document.createElement('div'); p.innerHTML = renderMd(data.text); bubble.appendChild(p); scrollToBottom(); }
+                if (lastDeltaNode) {
+                  // Finalize the streamed-text div with the complete text
+                  lastDeltaNode.innerHTML = renderMd(data.text);
+                } else if (data.text) {
+                  // No streaming happened, render full text block
+                  const p = document.createElement('div'); p.className = 'streamed-text'; p.innerHTML = renderMd(data.text); bubble.appendChild(p);
+                }
+                scrollToBottom();
                 streamedText = ''; lastDeltaNode = null;
                 break;
               case 'thinking':
