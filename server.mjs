@@ -899,19 +899,22 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal, inje
   // Build multimodal prompt if attachments present
   const effectivePrompt = attachments.length > 0 ? buildClaudeContent(prompt, attachments) : prompt;
 
-  const { sessionId, resultText } = await streamClaude({
-    prompt: effectivePrompt,
-    convId: conv.id,
-    sdkSessionId: conv.sdk_session,
-    mcpServers,
-    injectedContext,
-    onEvent: wrappedOnEvent,
-    abortSignal,
-  });
-
-  // Final update — remove streaming marker
-  const finalText = resultText || streamedText || "...";
-  updateMessageContent(msg.id, finalText);
+  let sessionId, resultText;
+  try {
+    ({ sessionId, resultText } = await streamClaude({
+      prompt: effectivePrompt,
+      convId: conv.id,
+      sdkSessionId: conv.sdk_session,
+      mcpServers,
+      injectedContext,
+      onEvent: wrappedOnEvent,
+      abortSignal,
+    }));
+  } finally {
+    // Always remove streaming marker, even on error/abort
+    const finalText = resultText || streamedText || "...";
+    updateMessageContent(msg.id, finalText);
+  }
 
   if (sessionId) updateConversationSdkSession(conv.id, sessionId);
   return { msgId: msg.id };

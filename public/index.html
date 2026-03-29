@@ -1241,7 +1241,7 @@ function stopStreaming() { if (abortController) abortController.abort(); finishS
 function finishStreaming() {
   isStreaming = false;
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>'; sendBtn.className = 'send-btn'; sendBtn.onclick = sendMessage;
-  if (statusBadge.textContent === 'Thinking') setStatus('', 'Ready');
+  setStatus('', 'Ready');
   // Remove any lingering loading indicators (e.g. when stop is clicked early)
   try { document.querySelectorAll('.loading-indicator').forEach(el => el.remove()); } catch(e) {}
   inputEl.focus();
@@ -1318,22 +1318,28 @@ function addStreamingBubble(partialContent) {
   }
   div.dataset.streaming = '1';
   messagesEl.appendChild(div);
+  let pollCount = 0;
+  const MAX_POLLS = 200; // 200 * 3s = 10 minutes max
+  const savedConvId = currentConvId;
   const poll = setInterval(async () => {
-    if (!currentConvId) { clearInterval(poll); return; }
-    const msgs = await api('GET', `/api/conversations/${currentConvId}/messages`);
-    const last = msgs[msgs.length - 1];
-    if (!last || last.role !== 'assistant') { clearInterval(poll); return; }
-    if (last.content.includes('<!-- streaming -->')) {
-      // Still streaming — update partial content
-      div.querySelector('.bubble').innerHTML = renderMd(last.content.replace('<!-- streaming -->', '')) + spinnerHtml;
-      scrollToBottom();
-    } else if (last.content !== '...') {
-      // Done
-      clearInterval(poll);
-      div.querySelector('.bubble').innerHTML = renderMd(last.content);
-      delete div.dataset.streaming;
-      scrollToBottom();
-    }
+    pollCount++;
+    if (!currentConvId || currentConvId !== savedConvId || pollCount > MAX_POLLS) { clearInterval(poll); try { div.querySelector('.loading-indicator')?.remove(); } catch(e) {} delete div.dataset.streaming; return; }
+    try {
+      const msgs = await api('GET', `/api/conversations/${currentConvId}/messages`);
+      const last = msgs[msgs.length - 1];
+      if (!last || last.role !== 'assistant') { clearInterval(poll); return; }
+      if (last.content.includes('<!-- streaming -->')) {
+        // Still streaming — update partial content
+        div.querySelector('.bubble').innerHTML = renderMd(last.content.replace('<!-- streaming -->', '')) + spinnerHtml;
+        scrollToBottom();
+      } else if (last.content !== '...') {
+        // Done
+        clearInterval(poll);
+        div.querySelector('.bubble').innerHTML = renderMd(last.content);
+        delete div.dataset.streaming;
+        scrollToBottom();
+      }
+    } catch(e) { clearInterval(poll); }
   }, 3000);
 }
 function createAssistantBubble() {
