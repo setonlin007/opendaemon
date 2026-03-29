@@ -1175,6 +1175,8 @@ function finishStreaming() {
   isStreaming = false;
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>'; sendBtn.className = 'send-btn'; sendBtn.onclick = sendMessage;
   if (statusBadge.textContent === 'Thinking') setStatus('', 'Ready');
+  // Remove any lingering loading indicators (e.g. when stop is clicked early)
+  try { document.querySelectorAll('.loading-indicator').forEach(el => el.remove()); } catch(e) {}
   inputEl.focus();
 }
 function setStatus(cls, text) { statusBadge.className = 'status ' + cls; statusBadge.textContent = text; }
