@@ -45,6 +45,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .conv-del { display: none; width: 22px; height: 22px; border: none; background: none; cursor: pointer; color: var(--text-3); border-radius: 4px; font-size: 14px; flex-shrink: 0; align-items: center; justify-content: center; }
 .conv-item:hover .conv-del { display: flex; }
 .conv-del:hover { color: var(--accent); background: rgba(233,69,96,0.1); }
+/* Unread dot on conversation item */
+.conv-unread { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; display: none; }
+.conv-item.unread .conv-unread { display: block; }
+.conv-item.unread .conv-title { color: #fff; font-weight: 600; }
+/* Notification dot on menu button */
+.menu-btn { position: relative; }
+.menu-dot { display: none; position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.menu-btn.has-unread .menu-dot { display: block; }
 
 .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-3); display: flex; justify-content: space-between; }
 .sidebar-footer a { color: var(--text-3); text-decoration: none; }
@@ -274,7 +282,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 <main class="main">
   <div class="chat-header">
     <div style="display:flex;align-items:center;gap:8px;">
-      <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()">&#9776;</button>
+      <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()">&#9776;<span class="menu-dot"></span></button>
       <span class="engine-label" id="engineLabel">Select an engine</span>
       <span class="session-info" id="sessionInfo"></span>
     </div>
@@ -324,6 +332,7 @@ let isStreaming = false;
 let abortController = null;
 let allCommands = [];
 let wasBackgrounded = false;
+const unreadConvs = new Set();
 
 const $ = (id) => document.getElementById(id);
 const messagesEl = $('messages');
@@ -393,9 +402,11 @@ function renderConversations() {
       const eng = engines.find(e => e.id === c.engine_id);
       const icon = eng?.icon || '?';
       const active = c.id === currentConvId ? ' active' : '';
-      h += `<div class="conv-item${active}" onclick="selectConversation('${c.id}')">
+      const unread = unreadConvs.has(c.id) ? ' unread' : '';
+      h += `<div class="conv-item${active}${unread}" data-conv-id="${c.id}" onclick="selectConversation('${c.id}')">
         <div class="conv-icon">${esc(icon)}</div>
         <div class="conv-title">${esc(c.title)}</div>
+        <div class="conv-unread"></div>
         <button class="conv-del" onclick="event.stopPropagation();deleteConv('${c.id}')">&times;</button>
       </div>`;
     }
@@ -426,10 +437,14 @@ async function selectConversation(id) {
   inputEl.disabled = false;
   sendBtn.disabled = false;
 
-  // Update active state without rebuilding DOM
+  // Mark as read and update active state without rebuilding DOM
+  unreadConvs.delete(id);
   document.querySelectorAll('.conv-item').forEach(el => {
-    el.classList.toggle('active', el.getAttribute('onclick')?.includes(id));
+    const isThis = el.dataset.convId === id;
+    el.classList.toggle('active', isThis);
+    if (isThis) el.classList.remove('unread');
   });
+  updateMenuDot();
 
   // Load messages
   const msgs = await api('GET', `/api/conversations/${id}/messages`);
@@ -584,6 +599,8 @@ async function sendMessage() {
                   const t = (data.usage.input_tokens||0) + (data.usage.output_tokens||0);
                   sessionInfo.textContent = `${t.toLocaleString()} tokens`;
                 }
+                // Mark conversation as having new content
+                if (currentConvId) markConvUnread(currentConvId);
                 break;
               case 'rate_limit':
                 if (data.status === 'rejected' || data.status === 'allowed_warning') {
@@ -655,6 +672,20 @@ function finishStreaming() {
   inputEl.focus();
 }
 function setStatus(cls, text) { statusBadge.className = 'status ' + cls; statusBadge.textContent = text; }
+
+function markConvUnread(convId) {
+  if (convId === currentConvId && document.hasFocus() && !document.hidden) return;
+  unreadConvs.add(convId);
+  // Update DOM if item exists
+  const item = document.querySelector(`.conv-item[data-conv-id="${convId}"]`);
+  if (item) item.classList.add('unread');
+  updateMenuDot();
+}
+
+function updateMenuDot() {
+  const menuBtn = $('menuBtn');
+  if (menuBtn) menuBtn.classList.toggle('has-unread', unreadConvs.size > 0);
+}
 function scrollToBottom() { requestAnimationFrame(() => { messagesEl.scrollTop = messagesEl.scrollHeight; }); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
