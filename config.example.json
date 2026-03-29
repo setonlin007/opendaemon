@@ -44,6 +44,23 @@
     "inject_max_tokens": 2000,
     "trace_enabled": true
   },
+  "sub_agents": {
+    "dispatch_mode": "disabled",
+    "max_parallel": 3,
+    "max_tokens_per_agent": 4096
+  },
+  "evaluator": {
+    "enabled": false,
+    "engine_id": "claude-opus",
+    "interval_ms": 60000
+  },
+  "ab_testing": {
+    "enabled": false
+  },
+  "self_coding": {
+    "enabled": false,
+    "auto_propose": false
+  },
   "mcp": {
     "opendaemon": {
       "command": "mcp/.venv/bin/python",

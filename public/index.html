@@ -270,6 +270,31 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .insight-card .badge.patterns { background: #1a2a3a; color: #60a5fa; }
 .insight-card .badge.domain { background: #3a2a1a; color: #fb923c; }
 .insight-card .badge.rules { background: #3a1a2a; color: #f472b6; }
+.insight-card .badge.automation { background: #2a1a3a; color: #c084fc; }
+
+/* ── Phase 4: Sub-Agent, A/B, Tools panels ── */
+.p4-card { background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+.p4-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.p4-card-title { font-size: 14px; font-weight: 600; }
+.p4-card-meta { font-size: 12px; color: var(--text-3); }
+.p4-status { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.p4-status.active, .p4-status.running, .p4-status.installed { background: #1a3a1a; color: #4ade80; }
+.p4-status.completed, .p4-status.validated { background: #1a2a3a; color: #60a5fa; }
+.p4-status.queued, .p4-status.pending, .p4-status.proposed { background: #3a3a1a; color: #facc15; }
+.p4-status.failed, .p4-status.cancelled, .p4-status.rejected, .p4-status.disabled { background: #3a1a1a; color: #f87171; }
+.p4-actions { display: flex; gap: 6px; margin-top: 8px; }
+.p4-btn { padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-2); font-size: 12px; cursor: pointer; }
+.p4-btn:hover { background: var(--hover); color: var(--text); }
+.p4-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+.p4-btn.danger { color: #f87171; }
+.p4-btn.success { color: #4ade80; }
+.p4-empty { color: var(--text-3); text-align: center; padding: 40px; font-size: 13px; }
+.p4-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.p4-variant { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 12px; font-family: monospace; white-space: pre-wrap; max-height: 120px; overflow-y: auto; }
+.p4-code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 12px; font-family: monospace; white-space: pre-wrap; max-height: 200px; overflow-y: auto; margin-top: 8px; }
+.sub-agent-indicator { background: var(--tool-bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin: 6px 0; font-size: 12px; }
+.sub-agent-indicator .agent-icon { margin-right: 6px; }
+.sub-agent-indicator .agent-status { float: right; }
 .insight-actions { display: flex; gap: 6px; margin-top: 8px; }
 .insight-actions button { padding: 4px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); }
 .btn-accept { background: #1a3a1a; color: #4ade80; }
@@ -361,6 +386,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
       <div class="evo-tab" onclick="switchEvoTab('reflect',this)">Reflect</div>
       <div class="evo-tab" onclick="switchEvoTab('pending',this)">Pending <span id="pendingBadge"></span></div>
       <div class="evo-tab" onclick="switchEvoTab('stats',this)">Stats</div>
+      <div class="evo-tab" onclick="switchEvoTab('agents',this)">Agents</div>
+      <div class="evo-tab" onclick="switchEvoTab('experiments',this)">A/B</div>
+      <div class="evo-tab" onclick="switchEvoTab('tools',this)">Tools</div>
     </div>
     <div class="evo-body" id="evoBody"></div>
   </div>
@@ -841,6 +869,28 @@ async function sendMessage() {
                   $('rateLimitBanner').textContent = `Rate limit: ${data.status}`;
                 }
                 break;
+              case 'sub_agent_start':
+                removeLoading();
+                { const sa = document.createElement('div'); sa.className = 'sub-agent-indicator'; sa.id = 'subAgentPanel';
+                  sa.innerHTML = `<strong>🤖 Sub-agents working...</strong> (${data.total} agent${data.total>1?'s':''})`;
+                  bubble.appendChild(sa); scrollToBottom(); }
+                break;
+              case 'sub_agent_delta':
+                { const panel = document.getElementById('subAgentPanel');
+                  if (panel && data.label) {
+                    const icons = { running: '⏳', completed: '✅', failed: '❌' };
+                    let agentLine = panel.querySelector(`[data-agent="${data.index}"]`);
+                    if (!agentLine) { agentLine = document.createElement('div'); agentLine.dataset.agent = data.index; agentLine.style.cssText = 'margin-top:4px;font-size:12px;'; panel.appendChild(agentLine); }
+                    agentLine.innerHTML = `<span class="agent-icon">${data.icon||'🔧'}</span>${esc(data.label)} <span class="agent-status">${icons[data.status]||data.status}${data.duration?' '+Math.round(data.duration/1000)+'s':''}</span>`;
+                    scrollToBottom();
+                  }
+                }
+                break;
+              case 'sub_agent_done':
+                { const panel = document.getElementById('subAgentPanel');
+                  if (panel) { panel.querySelector('strong').textContent = `🤖 Sub-agents done (${data.successful}/${data.total} succeeded)`; }
+                }
+                break;
               case 'done':
                 if (data.msg_id) assistantMsgId = data.msg_id;
                 break;
@@ -1232,6 +1282,9 @@ async function loadEvoTab(tab) {
     else if (tab === 'reflect') await loadReflectTab(body);
     else if (tab === 'pending') await loadPendingTab(body);
     else if (tab === 'stats') await loadStatsTab(body);
+    else if (tab === 'agents') await loadAgentsTab(body);
+    else if (tab === 'experiments') await loadExperimentsTab(body);
+    else if (tab === 'tools') await loadToolsTab(body);
   } catch (err) {
     body.innerHTML = `<p style="color:#f87171;">${esc(err.message)}</p>`;
   }
@@ -1626,6 +1679,262 @@ async function loadStatsTab(body) {
         Pending insights: <strong>${state.pending_insights_count}</strong>
       </div>
     </div>`;
+}
+
+// ── Phase 4: Agents Tab ──
+async function loadAgentsTab(body) {
+  try {
+    const config = await api('GET', '/api/orchestrator/config');
+    let html = `<div class="evo-section">
+      <h3>Sub-Agent Orchestration</h3>
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:12px;">
+        Dispatch mode: <strong>${esc(config.dispatch_mode)}</strong> |
+        Max parallel: <strong>${config.max_parallel||3}</strong> |
+        Agent types: <strong>${(config.agent_types||[]).join(', ')}</strong>
+      </div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:16px;">
+        💡 Set <code>sub_agents.dispatch_mode</code> to "auto" or "explicit" in config.json to enable.
+        In explicit mode, use <code>/research</code>, <code>/analyze</code>, <code>/review</code>, <code>/code</code> in chat.
+      </div>
+    </div>`;
+
+    // Show recent sub-agent runs if we have a current conversation
+    if (currentConvId) {
+      try {
+        const runs = await api('GET', `/api/sub-agents?conv_id=${currentConvId}`);
+        if (runs.length > 0) {
+          html += `<div class="evo-section"><h3>Recent Runs (this conversation)</h3>`;
+          for (const run of runs) {
+            const icons = { researcher:'🔍', analyst:'📊', coder:'💻', reviewer:'🔎' };
+            const dur = run.duration_ms ? `${(run.duration_ms/1000).toFixed(1)}s` : '—';
+            html += `<div class="p4-card">
+              <div class="p4-card-header">
+                <span class="p4-card-title">${icons[run.agent_type]||'🔧'} ${esc(run.agent_type)}</span>
+                <span class="p4-status ${run.status}">${esc(run.status)}</span>
+              </div>
+              <div class="p4-card-meta">${dur} | ${run.input_tokens||0} in / ${run.output_tokens||0} out</div>
+              ${run.output_result ? `<div class="p4-code">${esc((run.output_result||'').substring(0,500))}</div>` : ''}
+            </div>`;
+          }
+          html += `</div>`;
+        } else {
+          html += `<div class="p4-empty">No sub-agent runs in this conversation yet.</div>`;
+        }
+      } catch { html += `<div class="p4-empty">Select a conversation to see sub-agent runs.</div>`; }
+    } else {
+      html += `<div class="p4-empty">Select a conversation to see sub-agent runs.</div>`;
+    }
+
+    // Evaluator section
+    try {
+      const evalStats = await api('GET', '/api/evaluations/stats');
+      html += `<div class="evo-section" style="margin-top:16px;">
+        <h3>Knowledge Evaluator</h3>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-value">${evalStats.total||0}</div><div class="stat-label">Total Evaluations</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.passed||0}</div><div class="stat-label">Passed ✅</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.failed||0}</div><div class="stat-label">Flagged ⚠️</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.pending||0}</div><div class="stat-label">Pending</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.avg_delta != null ? evalStats.avg_delta.toFixed(2) : '—'}</div><div class="stat-label">Avg Delta</div></div>
+        </div>
+      </div>`;
+
+      const evals = await api('GET', '/api/evaluations?limit=10');
+      if (evals.length > 0) {
+        html += `<div class="evo-section" style="margin-top:12px;"><h3>Recent Evaluations</h3>`;
+        for (const ev of evals) {
+          const delta = ev.score_delta != null ? (ev.score_delta > 0 ? `+${ev.score_delta.toFixed(2)}` : ev.score_delta.toFixed(2)) : '—';
+          html += `<div class="p4-card">
+            <div class="p4-card-header">
+              <span class="p4-card-title">Knowledge #${ev.knowledge_id}</span>
+              <span class="p4-status ${ev.status}">${esc(ev.status)}</span>
+            </div>
+            <div class="p4-card-meta">Delta: ${delta} | ${ev.judge_reasoning ? esc(ev.judge_reasoning.substring(0,100)) : ''}</div>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+    } catch {}
+
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = `<p style="color:#f87171;">${esc(err.message)}</p>`;
+  }
+}
+
+// ── Phase 4: A/B Experiments Tab ──
+async function loadExperimentsTab(body) {
+  try {
+    const experiments = await api('GET', '/api/experiments');
+    let html = `<div class="evo-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3>A/B Experiments</h3>
+        <button class="p4-btn primary" onclick="showCreateExperiment()">+ New Experiment</button>
+      </div>
+    </div>`;
+
+    html += `<div id="createExpForm" style="display:none;margin-bottom:16px;">
+      <div class="p4-card">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <input id="expName" placeholder="Experiment name" style="padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+          <select id="expSurface" style="padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+            <option value="system_prompt">System Prompt</option>
+            <option value="injection_template">Injection Template</option>
+            <option value="reflection_prompt">Reflection Prompt</option>
+          </select>
+          <div class="p4-grid">
+            <div><label style="font-size:12px;color:var(--text-3);">Variant A</label><textarea id="expVarA" rows="4" style="width:100%;margin-top:4px;padding:8px;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical;"></textarea></div>
+            <div><label style="font-size:12px;color:var(--text-3);">Variant B</label><textarea id="expVarB" rows="4" style="width:100%;margin-top:4px;padding:8px;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical;"></textarea></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="font-size:12px;color:var(--text-3);">Min conversations:</label>
+            <input id="expMinConvs" type="number" value="20" min="4" style="width:60px;padding:6px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+            <button class="p4-btn primary" onclick="submitCreateExperiment()">Create</button>
+            <button class="p4-btn" onclick="document.getElementById('createExpForm').style.display='none'">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+    if (experiments.length === 0) {
+      html += `<div class="p4-empty">No experiments yet. Create one to start A/B testing!</div>`;
+    } else {
+      for (const exp of experiments) {
+        const fbA = exp.feedback_a ? JSON.parse(exp.feedback_a) : { good:0, bad:0 };
+        const fbB = exp.feedback_b ? JSON.parse(exp.feedback_b) : { good:0, bad:0 };
+        const ratioA = (fbA.good+fbA.bad)>0 ? (fbA.good/(fbA.good+fbA.bad)*100).toFixed(0) : '—';
+        const ratioB = (fbB.good+fbB.bad)>0 ? (fbB.good/(fbB.good+fbB.bad)*100).toFixed(0) : '—';
+
+        html += `<div class="p4-card">
+          <div class="p4-card-header">
+            <span class="p4-card-title">${esc(exp.name)}</span>
+            <span class="p4-status ${exp.status}">${esc(exp.status)}${exp.winner ? ` → ${exp.winner}` : ''}</span>
+          </div>
+          <div class="p4-card-meta">Surface: ${esc(exp.surface)} | Min: ${exp.min_conversations} convs</div>
+          <div class="p4-grid" style="margin-top:8px;">
+            <div style="font-size:12px;">
+              <strong>Variant A</strong> — ${exp.conversations_a||0} convs | 👍${fbA.good} 👎${fbA.bad} (${ratioA}%)
+              <div class="p4-variant">${esc((exp.variant_a||'').substring(0,200))}</div>
+            </div>
+            <div style="font-size:12px;">
+              <strong>Variant B</strong> — ${exp.conversations_b||0} convs | 👍${fbB.good} 👎${fbB.bad} (${ratioB}%)
+              <div class="p4-variant">${esc((exp.variant_b||'').substring(0,200))}</div>
+            </div>
+          </div>
+          ${exp.status === 'active' ? `<div class="p4-actions">
+            <button class="p4-btn success" onclick="decideExperiment(${exp.id},'A')">Pick A</button>
+            <button class="p4-btn success" onclick="decideExperiment(${exp.id},'B')">Pick B</button>
+            <button class="p4-btn danger" onclick="cancelExperiment(${exp.id})">Cancel</button>
+          </div>` : ''}
+        </div>`;
+      }
+    }
+
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = `<p style="color:#f87171;">${esc(err.message)}</p>`;
+  }
+}
+
+function showCreateExperiment() {
+  document.getElementById('createExpForm').style.display = 'block';
+}
+
+async function submitCreateExperiment() {
+  try {
+    const name = $('expName').value.trim();
+    const surface = $('expSurface').value;
+    const variantA = $('expVarA').value;
+    const variantB = $('expVarB').value;
+    const minConversations = parseInt($('expMinConvs').value) || 20;
+    if (!name || !variantA || !variantB) { alert('All fields required'); return; }
+    await api('POST', '/api/experiments', { name, surface, variantA, variantB, minConversations });
+    loadEvoTab('experiments');
+  } catch (err) { alert(err.message); }
+}
+
+async function decideExperiment(id, winner) {
+  if (!confirm(`Declare Variant ${winner} as winner?`)) return;
+  try {
+    await api('POST', `/api/experiments/${id}/decide`, { winner });
+    loadEvoTab('experiments');
+  } catch (err) { alert(err.message); }
+}
+
+async function cancelExperiment(id) {
+  if (!confirm('Cancel this experiment?')) return;
+  try {
+    await api('DELETE', `/api/experiments/${id}`);
+    loadEvoTab('experiments');
+  } catch (err) { alert(err.message); }
+}
+
+// ── Phase 4: Self-Coded Tools Tab ──
+async function loadToolsTab(body) {
+  try {
+    const tools = await api('GET', '/api/self-coded-tools');
+    let html = `<div class="evo-section">
+      <h3>Self-Coded Tools</h3>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:12px;">
+        Tools auto-proposed by the reflection system when it detects repeating patterns that could be automated.
+      </div>
+    </div>`;
+
+    if (tools.length === 0) {
+      html += `<div class="p4-empty">No self-coded tools yet. The system will propose tools when it detects automation opportunities during reflection.</div>`;
+    } else {
+      for (const tool of tools) {
+        html += `<div class="p4-card">
+          <div class="p4-card-header">
+            <span class="p4-card-title">🔧 ${esc(tool.tool_name)}</span>
+            <span class="p4-status ${tool.status}">${esc(tool.status)}</span>
+          </div>
+          <div class="p4-card-meta">${esc(tool.description||'No description')}</div>
+          ${tool.origin_pattern ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px;">Pattern: ${esc(tool.origin_pattern.substring(0,100))}</div>` : ''}
+          ${tool.code ? `<details style="margin-top:8px;"><summary style="font-size:12px;color:var(--text-2);cursor:pointer;">View Code</summary><div class="p4-code">${esc(tool.code)}</div></details>` : ''}
+          ${tool.test_result ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px;">Validation: ${esc(tool.test_result.substring(0,100))}</div>` : ''}
+          <div class="p4-actions">
+            ${tool.status === 'proposed' || tool.status === 'generated' || tool.status === 'validated' ? `<button class="p4-btn success" onclick="approveTool(${tool.id})">Approve & Install</button><button class="p4-btn danger" onclick="rejectTool(${tool.id})">Reject</button>` : ''}
+            ${tool.status === 'installed' ? `<button class="p4-btn danger" onclick="disableTool(${tool.id})">Disable</button>` : ''}
+            ${tool.status === 'disabled' ? `<button class="p4-btn success" onclick="enableTool(${tool.id})">Re-enable</button>` : ''}
+          </div>
+        </div>`;
+      }
+    }
+
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = `<p style="color:#f87171;">${esc(err.message)}</p>`;
+  }
+}
+
+async function approveTool(id) {
+  if (!confirm('Validate and install this tool?')) return;
+  try {
+    await api('POST', `/api/self-coded-tools/${id}/approve`);
+    loadEvoTab('tools');
+  } catch (err) { alert('Install failed: ' + err.message); }
+}
+
+async function rejectTool(id) {
+  try {
+    await api('POST', `/api/self-coded-tools/${id}/reject`);
+    loadEvoTab('tools');
+  } catch (err) { alert(err.message); }
+}
+
+async function disableTool(id) {
+  try {
+    await api('POST', `/api/self-coded-tools/${id}/disable`);
+    loadEvoTab('tools');
+  } catch (err) { alert(err.message); }
+}
+
+async function enableTool(id) {
+  try {
+    await api('POST', `/api/self-coded-tools/${id}/enable`);
+    loadEvoTab('tools');
+  } catch (err) { alert(err.message); }
 }
 
 // ── Start ──

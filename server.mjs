@@ -17,6 +17,10 @@ import { initKnowledge, listKnowledge, getKnowledgeContent, updateKnowledge, del
 import { buildInjectedContext } from "./lib/injector.mjs";
 import { loadGoals, saveGoals, prepareReflection, processReflectionResult, getPendingInsights, acceptPendingInsight, rejectPendingInsight, getReflectionHistory } from "./lib/reflect.mjs";
 import { initEvolution, onChatComplete, onFeedback, getEvolutionState, getEvolutionLog, getEvolutionStats } from "./lib/evolution.mjs";
+import { shouldDispatch, dispatch, getOrchestratorConfig, AGENT_TYPES } from "./lib/orchestrator.mjs";
+import { listSubAgentRuns, getEvaluations, getEvaluationStats, listExperiments as dbListExperiments } from "./lib/db.mjs";
+import { createExperiment, assignVariant, recordFeedback as abRecordFeedback, listExperiments, cancelExperiment, decideWinner } from "./lib/ab-testing.mjs";
+import { listSelfCodedTools, getToolDetail, validateTool, installTool, disableTool, enableTool } from "./lib/self-coder.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -202,6 +206,8 @@ const server = http.createServer(async (req, res) => {
     const result = updateTraceFeedback(msgId, body.feedback, body.note || null);
     if (!result) { json(res, { error: "trace not found for this message" }, 404); return; }
     onFeedback(msgId, body.feedback);
+    // A/B testing feedback tracking
+    try { if (body.conv_id) abRecordFeedback(body.conv_id, body.feedback); } catch {}
     json(res, { ok: true });
     return;
   }
@@ -627,6 +633,204 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Sub-Agent routes (Phase 4) ──
+
+  if (method === "GET" && path.match(/^\/api\/sub-agents$/)) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const convId = url.searchParams.get("conv_id");
+    if (!convId) { json(res, { error: "conv_id required" }, 400); return; }
+    try {
+      json(res, listSubAgentRuns(convId));
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "GET" && path === "/api/orchestrator/config") {
+    try {
+      json(res, { ...getOrchestratorConfig(), agent_types: Object.keys(AGENT_TYPES) });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "PUT" && path === "/api/orchestrator/config") {
+    const body = await readBody(req);
+    if (!body) { json(res, { error: "body required" }, 400); return; }
+    // Update orchestrator config in runtime (writes to config file would need config.mjs extension)
+    // For now, return current config as acknowledgement
+    json(res, { ok: true, note: "dispatch_mode changes require config.json update and restart" });
+    return;
+  }
+
+  // ── Evaluation routes (Phase 4) ──
+
+  if (method === "GET" && path === "/api/evaluations") {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const status = url.searchParams.get("status") || undefined;
+      const knowledgeId = url.searchParams.get("knowledge_id") ? parseInt(url.searchParams.get("knowledge_id")) : undefined;
+      const limit = url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit")) : 50;
+      json(res, getEvaluations({ status, knowledge_id: knowledgeId, limit }));
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "GET" && path === "/api/evaluations/stats") {
+    try {
+      json(res, getEvaluationStats());
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path === "/api/evaluations/run") {
+    const body = await readBody(req);
+    if (!body?.knowledge_id) { json(res, { error: "knowledge_id required" }, 400); return; }
+    try {
+      // Lazy-load evaluator to avoid circular deps
+      const { queueEvaluation } = await import("./lib/evaluator.mjs");
+      const result = queueEvaluation(body.knowledge_id);
+      json(res, result);
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // ── A/B Testing routes (Phase 4) ──
+
+  if (method === "GET" && path === "/api/experiments") {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const status = url.searchParams.get("status") || undefined;
+      json(res, listExperiments(status));
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path === "/api/experiments") {
+    const body = await readBody(req);
+    if (!body?.name || !body?.surface) { json(res, { error: "name and surface required" }, 400); return; }
+    try {
+      const result = createExperiment(body);
+      json(res, result);
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/experiments\/\d+\/decide$/)) {
+    const id = parseInt(path.split("/")[3]);
+    const body = await readBody(req);
+    if (!body?.winner) { json(res, { error: "winner (A or B) required" }, 400); return; }
+    try {
+      decideWinner(id, body.winner);
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+    return;
+  }
+
+  if (method === "DELETE" && path.match(/^\/api\/experiments\/\d+$/)) {
+    const id = parseInt(path.split("/")[3]);
+    try {
+      cancelExperiment(id);
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+    return;
+  }
+
+  // ── Self-Coded Tools routes (Phase 4) ──
+
+  if (method === "GET" && path === "/api/self-coded-tools") {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const status = url.searchParams.get("status") || undefined;
+      json(res, listSelfCodedTools(status));
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "GET" && path.match(/^\/api\/self-coded-tools\/\d+$/)) {
+    const id = parseInt(path.split("/")[3]);
+    try {
+      const tool = getToolDetail(id);
+      if (!tool) { json(res, { error: "not found" }, 404); return; }
+      json(res, tool);
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/self-coded-tools\/\d+\/approve$/)) {
+    const id = parseInt(path.split("/")[3]);
+    try {
+      const validation = validateTool(id);
+      if (!validation.valid) {
+        json(res, { error: "Validation failed", errors: validation.errors }, 400);
+        return;
+      }
+      const result = installTool(id);
+      // Hot-reload MCP if available
+      try { if (mcpManager) await mcpManager.reload?.(); } catch {}
+      json(res, result);
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/self-coded-tools\/\d+\/reject$/)) {
+    const id = parseInt(path.split("/")[3]);
+    try {
+      const { updateSelfCodedTool } = await import("./lib/db.mjs");
+      updateSelfCodedTool(id, { status: "rejected" });
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/self-coded-tools\/\d+\/disable$/)) {
+    const id = parseInt(path.split("/")[3]);
+    try {
+      disableTool(id);
+      try { if (mcpManager) await mcpManager.reload?.(); } catch {}
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/self-coded-tools\/\d+\/enable$/)) {
+    const id = parseInt(path.split("/")[3]);
+    try {
+      enableTool(id);
+      try { if (mcpManager) await mcpManager.reload?.(); } catch {}
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
   // ── Static files ──
 
   let filePath = path === "/" ? "/index.html" : path;
@@ -816,6 +1020,15 @@ async function startup() {
   } catch (err) {
     console.error("[init] MCP server failed to start:", err.message);
     console.log("[init] continuing without MCP tools");
+  }
+
+  // Start evaluator background loop (Phase 4)
+  try {
+    const { startEvaluationLoop } = await import("./lib/evaluator.mjs");
+    const evalInterval = config.evaluator?.interval_ms || 60000;
+    startEvaluationLoop(evalInterval);
+  } catch (err) {
+    console.log("[init] evaluator not started:", err.message);
   }
 
   server.listen(PORT, HOST, () => {
