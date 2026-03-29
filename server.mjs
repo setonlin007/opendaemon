@@ -367,7 +367,7 @@ const server = http.createServer(async (req, res) => {
       const contentType = MIME[ext] || "application/octet-stream";
       const fileName = relativePath.split("/").pop();
       // Images and previewable types: serve inline; others: download
-      const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml"].includes(ext);
+      const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml",".html",".htm"].includes(ext);
       const disposition = previewable ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
       res.writeHead(200, {
         "Content-Type": contentType,
