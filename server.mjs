@@ -290,12 +290,14 @@ const server = http.createServer(async (req, res) => {
     if (!existsSync(filePath) || !statSync(filePath).isFile()) {
       res.writeHead(404); res.end("Not Found"); return;
     }
-    const ext = filePath.substring(filePath.lastIndexOf("."));
+    const ext = filePath.substring(filePath.lastIndexOf(".")).toLowerCase();
     const contentType = MIME[ext] || "application/octet-stream";
     const fileName = relativePath.split("/").pop();
+    const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml",".html",".htm"].includes(ext);
+    const disposition = previewable ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
     res.writeHead(200, {
       "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Disposition": disposition,
       "Content-Length": statSync(filePath).size,
     });
     res.end(readFileSync(filePath));
