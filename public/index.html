@@ -145,26 +145,54 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 /* Rate limit */
 .rate-limit-banner { display: none; padding: 8px 20px; background: #3a2a00; color: #facc15; font-size: 12px; text-align: center; }
 
-/* Input */
-.input-area { padding: 16px 20px; border-top: 1px solid var(--border); background: var(--sidebar-bg); }
-.input-row { max-width: 900px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; }
+/* Input — WeChat-style */
+.input-area { padding: 10px 12px 12px; border-top: 1px solid var(--border); background: var(--sidebar-bg); }
+.input-row { max-width: 900px; margin: 0 auto; display: flex; gap: 6px; align-items: flex-end; }
 .input-wrapper { position: relative; flex: 1; }
-.input-wrapper textarea { width: 100%; background: var(--input-bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; color: var(--text); font-size: 14px; font-family: inherit; resize: none; min-height: 44px; max-height: 200px; outline: none; }
+.input-wrapper textarea { width: 100%; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 15px; font-family: inherit; resize: none; min-height: 40px; max-height: 120px; outline: none; transition: border-color 0.2s; }
 .input-wrapper textarea:focus { border-color: var(--accent); }
-.input-row button { background: var(--accent); color: white; border: none; border-radius: 12px; padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.input-row button:hover { opacity: 0.85; }
-.input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
-.input-row button.stop { background: #dc3545; }
-.attach-btn, .voice-btn { background: none !important; color: var(--text-3) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; padding: 8px 10px !important; font-size: 18px !important; line-height: 1; cursor: pointer; min-width: 42px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
-.attach-btn:hover, .voice-btn:hover { color: var(--accent) !important; border-color: var(--accent) !important; }
-.voice-btn.recording { color: var(--accent) !important; border-color: var(--accent) !important; background: rgba(233,69,96,0.1) !important; animation: voice-pulse 1.5s ease-in-out infinite; }
-@keyframes voice-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(233,69,96,0.3); } 50% { box-shadow: 0 0 0 8px rgba(233,69,96,0); } }
-.voice-btn.unsupported { opacity: 0.3 !important; cursor: not-allowed !important; }
-.voice-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; color: var(--text-2); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 50; }
-.voice-btn.recording .voice-tooltip { opacity: 1; }
-.voice-btn .voice-dot { display: inline-block; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; margin-right: 2px; vertical-align: middle; animation: voice-dot-blink 0.8s ease-in-out infinite; }
-@keyframes voice-dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-.input-hint { max-width: 900px; margin: 6px auto 0; font-size: 11px; color: var(--text-3); text-align: center; }
+/* Icon buttons (voice, attach) — WeChat flat style */
+.input-icon-btn { background: none !important; border: none !important; color: var(--text-2) !important; padding: 0 !important; font-size: 24px !important; line-height: 1; cursor: pointer; width: 36px; height: 40px; display: flex; align-items: center; justify-content: center; transition: color 0.2s; flex-shrink: 0; position: relative; }
+.input-icon-btn:hover { color: var(--text) !important; }
+.input-icon-btn:active { transform: scale(0.92); }
+.input-icon-btn.unsupported { opacity: 0.25 !important; cursor: not-allowed !important; }
+/* Voice recording state */
+.input-icon-btn.recording { color: var(--accent) !important; }
+.input-icon-btn.recording svg .mic-body { animation: voice-pulse-fill 1.2s ease-in-out infinite; }
+@keyframes voice-pulse-fill { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+/* Hold-to-talk button (voice mode) */
+.voice-hold-btn { display: none; flex: 1; height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text-2); font-size: 15px; font-weight: 500; cursor: pointer; user-select: none; -webkit-user-select: none; transition: all 0.15s; letter-spacing: 1px; }
+.voice-hold-btn:active, .voice-hold-btn.holding { background: var(--active); color: var(--accent); border-color: var(--accent); }
+.input-area.voice-mode .input-wrapper { display: none; }
+.input-area.voice-mode .voice-hold-btn { display: block; }
+/* Send button — WeChat green-accent circle */
+.send-btn { background: var(--accent) !important; color: white !important; border: none !important; border-radius: 8px !important; width: 40px; height: 40px; font-size: 18px !important; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; padding: 0 !important; }
+.send-btn:hover { opacity: 0.85; }
+.send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.send-btn.stop { background: #dc3545 !important; }
+.send-btn svg { width: 20px; height: 20px; fill: currentColor; }
+/* Plus/attach button hidden when send is active */
+.attach-plus { transition: all 0.2s; }
+/* Voice tooltip */
+.voice-tooltip { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); border-radius: 8px; padding: 8px 16px; font-size: 13px; color: #fff; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 50; backdrop-filter: blur(8px); }
+.voice-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: rgba(0,0,0,0.75); }
+.voice-hold-btn.holding ~ .voice-tooltip, .input-icon-btn.recording .voice-tooltip { opacity: 1; }
+/* Voice overlay (hold-to-talk feedback) */
+.voice-overlay { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; flex-direction: column; gap: 16px; backdrop-filter: blur(4px); }
+.voice-overlay.active { display: flex; }
+.voice-overlay-inner { background: var(--sidebar-bg); border-radius: 16px; padding: 32px 48px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.voice-overlay-waves { display: flex; align-items: center; gap: 3px; height: 40px; }
+.voice-overlay-waves span { display: block; width: 4px; border-radius: 2px; background: var(--accent); animation: wave-bar 0.8s ease-in-out infinite; }
+.voice-overlay-waves span:nth-child(1) { height: 12px; animation-delay: 0s; }
+.voice-overlay-waves span:nth-child(2) { height: 24px; animation-delay: 0.1s; }
+.voice-overlay-waves span:nth-child(3) { height: 36px; animation-delay: 0.2s; }
+.voice-overlay-waves span:nth-child(4) { height: 24px; animation-delay: 0.3s; }
+.voice-overlay-waves span:nth-child(5) { height: 12px; animation-delay: 0.4s; }
+@keyframes wave-bar { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.4); } }
+.voice-overlay-text { color: var(--text-2); font-size: 14px; }
+.voice-overlay-cancel { color: var(--accent); font-size: 13px; margin-top: 4px; }
+.voice-overlay.cancel-zone .voice-overlay-text { color: var(--accent); }
+.input-hint { max-width: 900px; margin: 4px auto 0; font-size: 11px; color: var(--text-3); text-align: center; }
 
 /* Attachment preview */
 .attachment-preview { max-width: 900px; margin: 0 auto 8px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -227,9 +255,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .main { width: 100%; }
   .messages { padding: 12px; }
   .message.user .bubble { max-width: 90%; }
-  .input-area { padding: 10px 12px; }
+  .input-area { padding: 8px 8px 10px; }
   .input-hint { display: none; }
-  .input-row button { padding: 10px 14px; }
+  .input-row { gap: 4px; }
+  .input-icon-btn { width: 32px; font-size: 22px !important; }
+  .send-btn { width: 36px; height: 36px; }
+  .input-wrapper textarea { min-height: 36px; padding: 8px 10px; font-size: 14px; }
+  .voice-hold-btn { height: 36px; font-size: 14px; }
   .chat-header { padding: 10px 12px; }
 }
 
@@ -363,22 +395,38 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     </div>
     <button class="scroll-bottom-btn" id="scrollBottomBtn" onclick="scrollToBottomManual()">↓ New messages</button>
   </div>
-  <div class="input-area">
+  <div class="input-area" id="inputArea">
     <div class="attachment-preview" id="attachmentPreview"></div>
     <div class="input-row">
-      <button class="attach-btn" id="attachBtn" onclick="triggerFileSelect()" title="Attach files">📎</button>
-      <input type="file" id="fileInput" multiple accept="image/*,text/*,.pdf,.json,.py,.js,.ts,.md,.csv,.xml,.yaml,.yml,.toml,.sh,.sql,.log,.cfg,.ini,.env,.jsx,.tsx,.vue,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.php,.swift,.kt" style="display:none" onchange="handleFileInput(this.files)">
-      <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceInput()" title="Voice input">
-        <span id="voiceIcon">🎤</span>
+      <!-- Left: voice/keyboard toggle -->
+      <button class="input-icon-btn" id="voiceToggleBtn" onclick="toggleVoiceMode()" title="Switch to voice">
+        <svg id="voiceModeIcon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path class="mic-body" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
         <span class="voice-tooltip" id="voiceTooltip">Listening...</span>
       </button>
+      <input type="file" id="fileInput" multiple accept="image/*,text/*,.pdf,.json,.py,.js,.ts,.md,.csv,.xml,.yaml,.yml,.toml,.sh,.sql,.log,.cfg,.ini,.env,.jsx,.tsx,.vue,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.php,.swift,.kt" style="display:none" onchange="handleFileInput(this.files)">
+      <!-- Middle: text input or hold-to-talk -->
       <div class="input-wrapper">
         <div class="autocomplete" id="autocomplete"></div>
         <textarea id="input" placeholder="Message OpenDaemon..." rows="1" disabled></textarea>
       </div>
-      <button id="sendBtn" onclick="sendMessage()" disabled>Send</button>
+      <button class="voice-hold-btn" id="voiceHoldBtn">Hold to Talk</button>
+      <!-- Right: attach + send -->
+      <button class="input-icon-btn attach-plus" id="attachBtn" onclick="triggerFileSelect()" title="Attach files">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </button>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled title="Send">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
     </div>
-    <div class="input-hint">Enter to send, Shift+Enter for newline</div>
+    <div class="input-hint">Enter to send · Shift+Enter for newline</div>
+  </div>
+  <!-- Voice overlay for hold-to-talk -->
+  <div class="voice-overlay" id="voiceOverlay">
+    <div class="voice-overlay-inner">
+      <div class="voice-overlay-waves"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="voice-overlay-text" id="voiceOverlayText">Release to send</div>
+      <div class="voice-overlay-cancel">↑ Slide up to cancel</div>
+    </div>
   </div>
   <!-- Image lightbox -->
   <div class="lightbox" id="lightbox" onclick="this.classList.remove('open')"><img id="lightboxImg"></div>
@@ -587,17 +635,22 @@ function triggerFileSelect() {
   $('fileInput').click();
 }
 
-// ── Voice Input (Web Speech API) ──
+// ── Voice Input — WeChat-style (Web Speech API) ──
 let voiceRecognition = null;
 let voiceIsListening = false;
+let voiceMode = false;          // true = hold-to-talk mode
+let voiceCancelled = false;
+let voiceStartY = 0;
+
+const KEYBOARD_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>';
+const MIC_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path class="mic-body" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>';
 
 function initVoiceInput() {
   try {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      const btn = $('voiceBtn');
-      btn.classList.add('unsupported');
-      btn.title = 'Your browser does not support voice input';
+      $('voiceToggleBtn').classList.add('unsupported');
+      $('voiceToggleBtn').title = 'Browser does not support voice input';
       return;
     }
     voiceRecognition = new SpeechRecognition();
@@ -606,11 +659,10 @@ function initVoiceInput() {
     voiceRecognition.lang = navigator.language || 'zh-CN';
 
     let finalTranscript = '';
-    let cursorPos = 0;
 
     voiceRecognition.onstart = () => {
       voiceIsListening = true;
-      $('voiceBtn').classList.add('recording');
+      $('voiceToggleBtn').classList.add('recording');
       $('voiceTooltip').textContent = 'Listening...';
     };
 
@@ -619,85 +671,132 @@ function initVoiceInput() {
         let interim = '';
         finalTranscript = '';
         for (let i = 0; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) {
-            finalTranscript += result[0].transcript;
-          } else {
-            interim += result[0].transcript;
-          }
+          const r = event.results[i];
+          if (r.isFinal) { finalTranscript += r[0].transcript; }
+          else { interim += r[0].transcript; }
         }
-        // Show interim in tooltip
-        if (interim) {
-          $('voiceTooltip').textContent = interim.slice(-30) || 'Listening...';
+        const display = finalTranscript + interim;
+        // Update tooltip / overlay
+        $('voiceTooltip').textContent = display.slice(-30) || 'Listening...';
+        if ($('voiceOverlay').classList.contains('active')) {
+          $('voiceOverlayText').textContent = display.slice(-40) || 'Listening...';
         }
-        // Append final transcript to textarea
+        // Update textarea
         const textarea = $('input');
-        const existing = textarea.value.slice(0, cursorPos);
-        textarea.value = existing + finalTranscript + interim;
+        textarea.value = display;
         textarea.style.height = 'auto';
         textarea.style.height = textarea.scrollHeight + 'px';
-      } catch (e) {
-        console.error('Voice result error:', e);
-      }
+      } catch (e) { console.error('Voice result error:', e); }
     };
 
     voiceRecognition.onend = () => {
       try {
-        // Commit final text (remove interim)
-        const textarea = $('input');
-        if (finalTranscript) {
-          const existing = textarea.value.slice(0, cursorPos);
-          textarea.value = existing + finalTranscript;
-          textarea.style.height = 'auto';
-          textarea.style.height = textarea.scrollHeight + 'px';
-        }
         voiceIsListening = false;
-        $('voiceBtn').classList.remove('recording');
+        $('voiceToggleBtn').classList.remove('recording');
+        $('voiceOverlay').classList.remove('active');
+        if (voiceCancelled) {
+          $('input').value = '';
+          voiceCancelled = false;
+        } else if (finalTranscript) {
+          $('input').value = finalTranscript;
+          $('input').style.height = 'auto';
+          $('input').style.height = $('input').scrollHeight + 'px';
+        }
         $('voiceTooltip').textContent = 'Listening...';
         finalTranscript = '';
-      } catch (e) {
-        console.error('Voice end error:', e);
-      }
+      } catch (e) { console.error('Voice end error:', e); }
     };
 
     voiceRecognition.onerror = (event) => {
       console.error('Voice recognition error:', event.error);
       voiceIsListening = false;
-      $('voiceBtn').classList.remove('recording');
-      if (event.error === 'not-allowed') {
-        $('voiceTooltip').textContent = 'Mic permission denied';
-        setTimeout(() => { $('voiceTooltip').textContent = 'Listening...'; }, 2000);
-      }
+      $('voiceToggleBtn').classList.remove('recording');
+      $('voiceOverlay').classList.remove('active');
     };
+
+    // Hold-to-talk touch events
+    const holdBtn = $('voiceHoldBtn');
+    holdBtn.addEventListener('touchstart', voiceHoldStart, { passive: false });
+    holdBtn.addEventListener('touchmove', voiceHoldMove, { passive: false });
+    holdBtn.addEventListener('touchend', voiceHoldEnd);
+    holdBtn.addEventListener('touchcancel', voiceHoldEnd);
+    // Mouse fallback for desktop
+    holdBtn.addEventListener('mousedown', voiceHoldStart);
+    holdBtn.addEventListener('mousemove', voiceHoldMove);
+    holdBtn.addEventListener('mouseup', voiceHoldEnd);
+    holdBtn.addEventListener('mouseleave', voiceHoldEnd);
   } catch (e) {
     console.error('Voice init error:', e);
-    const btn = $('voiceBtn');
-    btn.classList.add('unsupported');
-    btn.title = 'Voice input initialization failed';
+    $('voiceToggleBtn').classList.add('unsupported');
   }
 }
 
-function toggleVoiceInput() {
+function toggleVoiceMode() {
   try {
-    if (!voiceRecognition) {
-      return;
+    if (!voiceRecognition) return;
+    voiceMode = !voiceMode;
+    const area = $('inputArea');
+    const icon = $('voiceModeIcon');
+    if (voiceMode) {
+      area.classList.add('voice-mode');
+      icon.outerHTML = KEYBOARD_SVG.replace('<svg', '<svg id="voiceModeIcon"');
+      $('voiceToggleBtn').title = 'Switch to keyboard';
+    } else {
+      area.classList.remove('voice-mode');
+      const el = $('voiceModeIcon');
+      el.outerHTML = MIC_SVG.replace('<svg', '<svg id="voiceModeIcon"');
+      $('voiceToggleBtn').title = 'Switch to voice';
+      if (voiceIsListening) voiceRecognition.stop();
     }
+  } catch (e) { console.error('Voice mode toggle error:', e); }
+}
+
+function voiceHoldStart(e) {
+  try {
+    if (!voiceRecognition || !voiceMode) return;
+    e.preventDefault();
+    voiceCancelled = false;
+    voiceStartY = e.touches ? e.touches[0].clientY : e.clientY;
+    $('voiceHoldBtn').classList.add('holding');
+    $('voiceOverlay').classList.remove('cancel-zone');
+    $('voiceOverlay').classList.add('active');
+    $('voiceOverlayText').textContent = 'Listening...';
+    $('input').value = '';
+    voiceRecognition.lang = navigator.language || 'zh-CN';
+    voiceRecognition.start();
+  } catch (e2) { console.error('Voice hold start error:', e2); }
+}
+
+function voiceHoldMove(e) {
+  try {
+    if (!voiceIsListening) return;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    const diff = voiceStartY - y;
+    if (diff > 80) {
+      $('voiceOverlay').classList.add('cancel-zone');
+      $('voiceOverlayText').textContent = 'Release to cancel';
+      voiceCancelled = true;
+    } else {
+      $('voiceOverlay').classList.remove('cancel-zone');
+      voiceCancelled = false;
+    }
+  } catch (e2) { console.error('Voice hold move error:', e2); }
+}
+
+function voiceHoldEnd() {
+  try {
+    $('voiceHoldBtn').classList.remove('holding');
     if (voiceIsListening) {
       voiceRecognition.stop();
-    } else {
-      // Record current cursor position to append after existing text
-      const textarea = $('input');
-      voiceRecognition.lang = navigator.language || 'zh-CN';
-      voiceRecognition.start();
+      // If not cancelled and has text, auto-send
+      if (!voiceCancelled && $('input').value.trim()) {
+        setTimeout(() => { sendMessage(); }, 200);
+      }
     }
-  } catch (e) {
-    console.error('Voice toggle error:', e);
-    voiceIsListening = false;
-    $('voiceBtn').classList.remove('recording');
-  }
+    $('voiceOverlay').classList.remove('active', 'cancel-zone');
+  } catch (e) { console.error('Voice hold end error:', e); }
 }
 
-// Initialize voice input on load
 document.addEventListener('DOMContentLoaded', initVoiceInput);
 
 function handleFileInput(fileList) {
@@ -856,8 +955,8 @@ async function sendMessage() {
   clearAttachments();
 
   isStreaming = true;
-  sendBtn.textContent = 'Stop';
-  sendBtn.className = 'stop';
+  sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+  sendBtn.className = 'send-btn stop';
   sendBtn.onclick = stopStreaming;
   setStatus('busy', 'Thinking');
 
@@ -1074,7 +1173,7 @@ async function sendMessage() {
 function stopStreaming() { if (abortController) abortController.abort(); finishStreaming(); }
 function finishStreaming() {
   isStreaming = false;
-  sendBtn.textContent = 'Send'; sendBtn.className = ''; sendBtn.onclick = sendMessage;
+  sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>'; sendBtn.className = 'send-btn'; sendBtn.onclick = sendMessage;
   if (statusBadge.textContent === 'Thinking') setStatus('', 'Ready');
   inputEl.focus();
 }
