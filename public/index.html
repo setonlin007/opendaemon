@@ -641,6 +641,7 @@ let conversations = [];
 let currentConvId = null;
 let currentEngine = null;
 let isStreaming = false;
+let streamingConvId = null; // track which conversation is streaming
 let abortController = null;
 let allCommands = [];
 let wasBackgrounded = false;
@@ -838,6 +839,18 @@ async function selectConversation(id) {
   sessionInfo.textContent = '';
   inputEl.disabled = false;
   sendBtn.disabled = false;
+
+  // Sync stop button & status indicator with whether THIS conversation is streaming
+  if (isStreaming && streamingConvId === id) {
+    sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+    sendBtn.className = 'send-btn stop';
+    sendBtn.onclick = stopStreaming;
+  } else {
+    sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+    sendBtn.className = 'send-btn';
+    sendBtn.onclick = sendMessage;
+    setStatus('', 'Ready');
+  }
 
   // Mark as read and update active state without rebuilding DOM
   unreadConvs.delete(id);
@@ -1220,6 +1233,7 @@ async function sendMessage() {
   clearAttachments();
 
   isStreaming = true;
+  streamingConvId = currentConvId;
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
   sendBtn.className = 'send-btn stop';
   sendBtn.onclick = stopStreaming;
@@ -1438,6 +1452,7 @@ async function sendMessage() {
 function stopStreaming() { if (abortController) abortController.abort(); finishStreaming(); }
 function finishStreaming() {
   isStreaming = false;
+  streamingConvId = null;
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>'; sendBtn.className = 'send-btn'; sendBtn.onclick = sendMessage;
   setStatus('', 'Ready');
   // Remove any lingering loading indicators (e.g. when stop is clicked early)
