@@ -1291,17 +1291,27 @@ function updateMenuDot() {
   if (menuBtn) menuBtn.classList.toggle('has-unread', unreadConvs.size > 0);
 }
 let userScrolledUp = false;
+let isAutoScrolling = false;
 function scrollToBottom() {
   if (userScrolledUp) return; // respect user's scroll position
-  requestAnimationFrame(() => { messagesEl.scrollTop = messagesEl.scrollHeight; });
+  requestAnimationFrame(() => {
+    if (userScrolledUp) return; // re-check after frame delay (race condition fix)
+    isAutoScrolling = true;
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    // Reset flag after scroll event has fired
+    requestAnimationFrame(() => { isAutoScrolling = false; });
+  });
 }
 function scrollToBottomManual() {
   userScrolledUp = false;
+  isAutoScrolling = true;
   messagesEl.scrollTop = messagesEl.scrollHeight;
   $('scrollBottomBtn').classList.remove('visible');
+  requestAnimationFrame(() => { isAutoScrolling = false; });
 }
 // Detect user scroll: if user scrolls up > 150px from bottom, stop auto-scroll
 messagesEl.addEventListener('scroll', () => {
+  if (isAutoScrolling) return; // ignore programmatic / DOM-mutation scrolls
   const distFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
   if (distFromBottom > 150) {
     if (!userScrolledUp && isStreaming) {
