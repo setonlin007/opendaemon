@@ -383,7 +383,10 @@ const autocompleteEl = $('autocomplete');
 // ── Init ──
 async function init() {
   try {
-    engines = await api('GET', '/api/engines');
+    const enginesResp = await api('GET', '/api/engines');
+    // Server returns {engines: [...], server_boot: ...}
+    engines = enginesResp.engines || enginesResp;
+    window._serverBoot = enginesResp.server_boot || null;
     engineSelect.innerHTML = engines.map(e =>
       `<option value="${e.id}">${e.icon ? e.icon + ' ' : ''}${e.label}</option>`
     ).join('');
@@ -1108,25 +1111,33 @@ function startHealthCheck() {
     if (isStreaming) return; // don't interfere with active chat
     try {
       const r = await fetch('/api/engines', { signal: AbortSignal.timeout(3000) });
-      if (!r.ok && r.status === 401) {
-        // Session lost after restart — reload to login
+      if (r.status === 401) {
+        // Session lost — reload to login
         clearInterval(healthCheckTimer);
         location.reload();
+        return;
+      }
+      if (r.ok) {
+        const data = await r.json();
+        // Detect server restart by comparing boot timestamp
+        if (window._serverBoot && data.server_boot && data.server_boot !== window._serverBoot) {
+          console.log('[health] server restarted, reloading...');
+          clearInterval(healthCheckTimer);
+          location.reload();
+        }
       }
     } catch {
       // Server unreachable — it's restarting. Poll until it's back.
       clearInterval(healthCheckTimer);
       healthCheckTimer = null;
-      const poll = async () => {
-        for (let i = 0; i < 30; i++) {
-          await new Promise(r => setTimeout(r, 2000));
-          try {
-            const r = await fetch('/api/engines', { signal: AbortSignal.timeout(3000) });
-            if (r.ok || r.status === 401) { location.reload(); return; }
-          } catch {}
-        }
-      };
-      poll();
+      console.log('[health] server unreachable, polling...');
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const r = await fetch('/api/engines', { signal: AbortSignal.timeout(3000) });
+          if (r.ok || r.status === 401) { location.reload(); return; }
+        } catch {}
+      }
     }
   }, 5000);
 }

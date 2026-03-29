@@ -43,6 +43,7 @@ const MIME = {
 };
 
 // ── Initialize ──
+const SERVER_BOOT = Date.now();
 const config = loadConfig();
 const PORT = process.env.PORT || config.server?.port || 3456;
 const HOST = process.env.HOST || config.server?.host || "127.0.0.1";
@@ -134,7 +135,7 @@ const server = http.createServer(async (req, res) => {
   // ── Engine routes ──
 
   if (method === "GET" && path === "/api/engines") {
-    json(res, getEngines());
+    json(res, { engines: getEngines(), server_boot: SERVER_BOOT });
     return;
   }
 
