@@ -206,6 +206,7 @@ let currentEngine = null;
 let isStreaming = false;
 let abortController = null;
 let allCommands = [];
+let wasBackgrounded = false;
 
 const $ = (id) => document.getElementById(id);
 const messagesEl = $('messages');
@@ -466,6 +467,14 @@ async function sendMessage() {
       removeLoading();
       const isNetworkError = err.message.includes('network') || err.message.includes('Failed to fetch') || err.message.includes('Load failed') || err.name === 'TypeError';
       if (isNetworkError) {
+        // If page was backgrounded (e.g. iOS app switch), recover silently
+        if (document.hidden || wasBackgrounded) {
+          wasBackgrounded = false;
+          finishStreaming();
+          // Silently reload messages to get latest state
+          if (currentConvId) selectConversation(currentConvId);
+          return;
+        }
         bubble.innerHTML += `<p style="color:#f0a030;">Connection lost. Reconnecting...</p>`;
         // Auto-reconnect: poll until server is back
         const reconnect = async () => {
@@ -601,6 +610,22 @@ const sidebarEl = document.querySelector('.sidebar');
 const overlayEl = $('sidebarOverlay');
 function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('visible'); }
 function closeSidebar() { sidebarEl.classList.remove('open'); overlayEl.classList.remove('visible'); }
+
+// ── Background/foreground detection (iOS app switch) ──
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    wasBackgrounded = true;
+  } else {
+    // Came back from background
+    if (wasBackgrounded && !isStreaming && currentConvId) {
+      // Not streaming: silently refresh current conversation
+      wasBackgrounded = false;
+      selectConversation(currentConvId);
+    }
+    // If streaming, wasBackgrounded stays true so the SSE error handler
+    // will pick it up and recover silently instead of showing reconnect UI
+  }
+});
 
 
 
