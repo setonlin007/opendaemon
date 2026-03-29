@@ -213,6 +213,7 @@ const server = http.createServer(async (req, res) => {
   if (method === "POST" && path === "/api/upload") {
     try {
       const { fields, files } = await parseMultipart(req);
+      console.log(`[upload] fields=${JSON.stringify(Object.keys(fields))} files=${files.length} filenames=${files.map(f => f.filename).join(',')}`);
       const convId = fields.conv_id;
       if (!convId) { json(res, { error: "conv_id required" }, 400); return; }
       const conv = getConversation(convId);

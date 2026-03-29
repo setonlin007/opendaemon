@@ -586,7 +586,9 @@ async function handleFiles(files) {
       formData.append('file', uploadFile, file.name);
       const resp = await fetch('/api/upload', { method: 'POST', body: formData });
       const results = await resp.json();
-      if (results[0]?.error) throw new Error(results[0].error);
+      // Server may return {error:"..."} or [{error:"..."}, ...]
+      if (!Array.isArray(results)) throw new Error(results.error || 'Upload failed');
+      if (!results[0] || results[0].error) throw new Error(results[0]?.error || 'Upload returned empty');
       const att = results[0];
       att._thumbId = thumbId;
       pendingAttachments.push(att);
