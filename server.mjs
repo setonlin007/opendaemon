@@ -250,6 +250,7 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal) {
 
   const { sessionId, resultText } = await streamClaude({
     prompt,
+    convId: conv.id,
     sdkSessionId: conv.sdk_session,
     mcpServers,
     onEvent,
