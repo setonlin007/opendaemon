@@ -47,6 +47,15 @@ async function initMCP() {
   await mcpManager.start();
 }
 
+// Clean up any streaming markers left by interrupted sessions
+try {
+  const { getDb } = await import("./lib/db.mjs");
+  const cleaned = getDb()
+    .prepare("UPDATE messages SET content = REPLACE(content, '\n\n<!-- streaming -->', '') WHERE content LIKE '%<!-- streaming -->%'")
+    .run();
+  if (cleaned.changes > 0) console.log(`[init] cleaned ${cleaned.changes} interrupted streaming message(s)`);
+} catch {}
+
 console.log(`[init] ${config.engines.length} engines configured, listening on ${HOST}:${PORT}`);
 
 // ── Helpers ──
