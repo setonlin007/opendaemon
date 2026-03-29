@@ -104,7 +104,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .bubble li { margin: 2px 0; }
 .bubble li > ul,.bubble li > ol { margin: 2px 0; }
 .bubble blockquote { border-left: 3px solid var(--border); padding-left: 12px; color: var(--text-2); margin: 8px 0; }
-.bubble table { border-collapse: collapse; margin: 8px 0; width: 100%; }
+.bubble .table-wrap { overflow-x: auto; margin: 8px 0; -webkit-overflow-scrolling: touch; }
+.bubble table { border-collapse: collapse; width: 100%; min-width: max-content; }
 .bubble th,.bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 13px; }
 .bubble th { background: var(--tool-bg); }
 .bubble hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
@@ -1334,7 +1335,11 @@ const markedInstance = new marked.Marked({
 });
 
 function renderMd(text) {
-  return markedInstance.parse(text);
+  try {
+    let html = markedInstance.parse(text);
+    html = html.replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, '</table></div>');
+    return html;
+  } catch(e) { return text; }
 }
 
 function copyCode(btn) {
