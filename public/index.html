@@ -155,8 +155,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .input-row button:hover { opacity: 0.85; }
 .input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
 .input-row button.stop { background: #dc3545; }
-.attach-btn { background: none !important; color: var(--text-3) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; padding: 8px 10px !important; font-size: 18px !important; line-height: 1; cursor: pointer; min-width: 42px; display: flex; align-items: center; justify-content: center; }
-.attach-btn:hover { color: var(--accent) !important; border-color: var(--accent) !important; }
+.attach-btn, .voice-btn { background: none !important; color: var(--text-3) !important; border: 1px solid var(--border) !important; border-radius: 10px !important; padding: 8px 10px !important; font-size: 18px !important; line-height: 1; cursor: pointer; min-width: 42px; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
+.attach-btn:hover, .voice-btn:hover { color: var(--accent) !important; border-color: var(--accent) !important; }
+.voice-btn.recording { color: var(--accent) !important; border-color: var(--accent) !important; background: rgba(233,69,96,0.1) !important; animation: voice-pulse 1.5s ease-in-out infinite; }
+@keyframes voice-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(233,69,96,0.3); } 50% { box-shadow: 0 0 0 8px rgba(233,69,96,0); } }
+.voice-btn.unsupported { opacity: 0.3 !important; cursor: not-allowed !important; }
+.voice-tooltip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; color: var(--text-2); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 50; }
+.voice-btn.recording .voice-tooltip { opacity: 1; }
+.voice-btn .voice-dot { display: inline-block; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; margin-right: 2px; vertical-align: middle; animation: voice-dot-blink 0.8s ease-in-out infinite; }
+@keyframes voice-dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .input-hint { max-width: 900px; margin: 6px auto 0; font-size: 11px; color: var(--text-3); text-align: center; }
 
 /* Attachment preview */
@@ -361,6 +368,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     <div class="input-row">
       <button class="attach-btn" id="attachBtn" onclick="triggerFileSelect()" title="Attach files">📎</button>
       <input type="file" id="fileInput" multiple accept="image/*,text/*,.pdf,.json,.py,.js,.ts,.md,.csv,.xml,.yaml,.yml,.toml,.sh,.sql,.log,.cfg,.ini,.env,.jsx,.tsx,.vue,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.php,.swift,.kt" style="display:none" onchange="handleFileInput(this.files)">
+      <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceInput()" title="Voice input">
+        <span id="voiceIcon">🎤</span>
+        <span class="voice-tooltip" id="voiceTooltip">Listening...</span>
+      </button>
       <div class="input-wrapper">
         <div class="autocomplete" id="autocomplete"></div>
         <textarea id="input" placeholder="Message OpenDaemon..." rows="1" disabled></textarea>
@@ -575,6 +586,119 @@ async function deleteConv(id) {
 function triggerFileSelect() {
   $('fileInput').click();
 }
+
+// ── Voice Input (Web Speech API) ──
+let voiceRecognition = null;
+let voiceIsListening = false;
+
+function initVoiceInput() {
+  try {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      const btn = $('voiceBtn');
+      btn.classList.add('unsupported');
+      btn.title = 'Your browser does not support voice input';
+      return;
+    }
+    voiceRecognition = new SpeechRecognition();
+    voiceRecognition.continuous = true;
+    voiceRecognition.interimResults = true;
+    voiceRecognition.lang = navigator.language || 'zh-CN';
+
+    let finalTranscript = '';
+    let cursorPos = 0;
+
+    voiceRecognition.onstart = () => {
+      voiceIsListening = true;
+      $('voiceBtn').classList.add('recording');
+      $('voiceTooltip').textContent = 'Listening...';
+    };
+
+    voiceRecognition.onresult = (event) => {
+      try {
+        let interim = '';
+        finalTranscript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript;
+          } else {
+            interim += result[0].transcript;
+          }
+        }
+        // Show interim in tooltip
+        if (interim) {
+          $('voiceTooltip').textContent = interim.slice(-30) || 'Listening...';
+        }
+        // Append final transcript to textarea
+        const textarea = $('input');
+        const existing = textarea.value.slice(0, cursorPos);
+        textarea.value = existing + finalTranscript + interim;
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+      } catch (e) {
+        console.error('Voice result error:', e);
+      }
+    };
+
+    voiceRecognition.onend = () => {
+      try {
+        // Commit final text (remove interim)
+        const textarea = $('input');
+        if (finalTranscript) {
+          const existing = textarea.value.slice(0, cursorPos);
+          textarea.value = existing + finalTranscript;
+          textarea.style.height = 'auto';
+          textarea.style.height = textarea.scrollHeight + 'px';
+        }
+        voiceIsListening = false;
+        $('voiceBtn').classList.remove('recording');
+        $('voiceTooltip').textContent = 'Listening...';
+        finalTranscript = '';
+      } catch (e) {
+        console.error('Voice end error:', e);
+      }
+    };
+
+    voiceRecognition.onerror = (event) => {
+      console.error('Voice recognition error:', event.error);
+      voiceIsListening = false;
+      $('voiceBtn').classList.remove('recording');
+      if (event.error === 'not-allowed') {
+        $('voiceTooltip').textContent = 'Mic permission denied';
+        setTimeout(() => { $('voiceTooltip').textContent = 'Listening...'; }, 2000);
+      }
+    };
+  } catch (e) {
+    console.error('Voice init error:', e);
+    const btn = $('voiceBtn');
+    btn.classList.add('unsupported');
+    btn.title = 'Voice input initialization failed';
+  }
+}
+
+function toggleVoiceInput() {
+  try {
+    if (!voiceRecognition) {
+      return;
+    }
+    if (voiceIsListening) {
+      voiceRecognition.stop();
+    } else {
+      // Record current cursor position to append after existing text
+      const textarea = $('input');
+      voiceRecognition.lang = navigator.language || 'zh-CN';
+      voiceRecognition.start();
+    }
+  } catch (e) {
+    console.error('Voice toggle error:', e);
+    voiceIsListening = false;
+    $('voiceBtn').classList.remove('recording');
+  }
+}
+
+// Initialize voice input on load
+document.addEventListener('DOMContentLoaded', initVoiceInput);
 
 function handleFileInput(fileList) {
   if (!fileList || fileList.length === 0) return;
