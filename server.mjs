@@ -2,7 +2,8 @@ import http from "http";
 import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { readFileSync, existsSync, statSync } from "fs";
+import { readFileSync, existsSync, statSync, readdirSync } from "fs";
+import { homedir } from "os";
 
 import { loadConfig, getEngineById, getEngines } from "./lib/config.mjs";
 import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
@@ -297,6 +298,85 @@ const server = http.createServer(async (req, res) => {
       "Content-Length": statSync(filePath).size,
     });
     res.end(readFileSync(filePath));
+    return;
+  }
+
+  // ── Workspace: artifacts directory tree ──
+
+  const WORKSPACE_ARTIFACTS = join(homedir(), "workspace", "artifacts");
+
+  if (method === "GET" && path === "/api/workspace/tree") {
+    try {
+      const qIdx = req.url.indexOf("?");
+      const params = qIdx >= 0 ? new URLSearchParams(req.url.substring(qIdx)) : new URLSearchParams();
+      const relPath = params.get("path") || "";
+      if (relPath.includes("..") || relPath.startsWith("/")) {
+        res.writeHead(403); res.end("Forbidden"); return;
+      }
+      const absDir = join(WORKSPACE_ARTIFACTS, relPath);
+      if (!absDir.startsWith(WORKSPACE_ARTIFACTS)) {
+        res.writeHead(403); res.end("Forbidden"); return;
+      }
+      if (!existsSync(absDir) || !statSync(absDir).isDirectory()) {
+        json(res, { path: relPath, items: [] });
+        return;
+      }
+      const entries = readdirSync(absDir);
+      const items = [];
+      for (const name of entries) {
+        if (name.startsWith(".")) continue;
+        try {
+          const full = join(absDir, name);
+          const st = statSync(full);
+          if (st.isDirectory()) {
+            let childrenCount = 0;
+            try { childrenCount = readdirSync(full).filter(n => !n.startsWith(".")).length; } catch {}
+            items.push({ name, type: "dir", children_count: childrenCount, mtime: st.mtimeMs });
+          } else {
+            const ext = name.substring(name.lastIndexOf(".")).toLowerCase();
+            items.push({ name, type: "file", size: st.size, mtime: st.mtimeMs, mime: MIME[ext] || "application/octet-stream" });
+          }
+        } catch {}
+      }
+      items.sort((a, b) => {
+        if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+      json(res, { path: relPath, items });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "GET" && path.startsWith("/api/workspace/files/")) {
+    try {
+      const relativePath = decodeURIComponent(path.substring("/api/workspace/files/".length));
+      if (relativePath.includes("..") || relativePath.startsWith("/")) {
+        res.writeHead(403); res.end("Forbidden"); return;
+      }
+      const filePath = join(WORKSPACE_ARTIFACTS, relativePath);
+      if (!filePath.startsWith(WORKSPACE_ARTIFACTS)) {
+        res.writeHead(403); res.end("Forbidden"); return;
+      }
+      if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+        res.writeHead(404); res.end("Not Found"); return;
+      }
+      const ext = filePath.substring(filePath.lastIndexOf(".")).toLowerCase();
+      const contentType = MIME[ext] || "application/octet-stream";
+      const fileName = relativePath.split("/").pop();
+      // Images and previewable types: serve inline; others: download
+      const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml"].includes(ext);
+      const disposition = previewable ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
+      res.writeHead(200, {
+        "Content-Type": contentType,
+        "Content-Disposition": disposition,
+        "Content-Length": statSync(filePath).size,
+      });
+      res.end(readFileSync(filePath));
+    } catch (err) {
+      res.writeHead(500); res.end(err.message);
+    }
     return;
   }
 
