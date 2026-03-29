@@ -13,7 +13,7 @@ import { MCPManager } from "./lib/mcp-manager.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
 import { initKnowledge, listKnowledge, getKnowledgeContent, updateKnowledge, deleteKnowledge } from "./lib/knowledge.mjs";
 import { buildInjectedContext } from "./lib/injector.mjs";
-import { loadGoals, saveGoals, prepareReflection, processReflectionResult, getPendingInsights, acceptPendingInsight, rejectPendingInsight } from "./lib/reflect.mjs";
+import { loadGoals, saveGoals, prepareReflection, processReflectionResult, getPendingInsights, acceptPendingInsight, rejectPendingInsight, getReflectionHistory } from "./lib/reflect.mjs";
 import { initEvolution, onChatComplete, onFeedback, getEvolutionState, getEvolutionLog, getEvolutionStats } from "./lib/evolution.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -374,13 +374,30 @@ const server = http.createServer(async (req, res) => {
 
   // ── Reflection routes ──
 
+  if (method === "POST" && path === "/api/reflect/preview") {
+    const body = await readBody(req);
+    const since = body?.since || null;
+    const limit = body?.limit || 100;
+    const prep = prepareReflection(limit, since);
+    json(res, { trace_count: prep.traceCount, summary: prep.summary, trace_start: prep.traceStart, trace_end: prep.traceEnd });
+    return;
+  }
+
+  if (method === "GET" && path === "/api/reflect/history") {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const limit = url.searchParams.get("limit") ? parseInt(url.searchParams.get("limit")) : 20;
+    json(res, getReflectionHistory(limit));
+    return;
+  }
+
   if (method === "POST" && path === "/api/reflect") {
     const body = await readBody(req);
     const engineId = body?.engine_id || config.evolution?.reflection_engine || config.engines[0]?.id;
     const engine = getEngineById(engineId);
     if (!engine) { json(res, { error: "engine not found" }, 400); return; }
 
-    const prep = prepareReflection(body?.limit || 100);
+    const since = body?.since || null;
+    const prep = prepareReflection(body?.limit || 100, since);
     if (prep.traceCount === 0) {
       json(res, { error: "no traces to reflect on" }, 400);
       return;
