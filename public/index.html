@@ -128,6 +128,26 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Mobile hamburger ── */
+.menu-btn { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 4px 8px; line-height: 1; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 99; }
+
+/* ── Mobile responsive ── */
+@media (max-width: 768px) {
+  body { position: relative; }
+  .sidebar { position: fixed; left: 0; top: 0; z-index: 100; transform: translateX(-100%); transition: transform 0.25s ease; width: 280px; min-width: 280px; }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.visible { display: block; }
+  .menu-btn { display: block; }
+  .main { width: 100%; }
+  .messages { padding: 12px; }
+  .message.user .bubble { max-width: 90%; }
+  .input-area { padding: 10px 12px; }
+  .input-hint { display: none; }
+  .input-row button { padding: 10px 14px; }
+  .chat-header { padding: 10px 12px; }
+}
 </style>
 </head>
 <body>
@@ -148,10 +168,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   </div>
 </aside>
 
+<!-- Mobile overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
 <!-- Main -->
 <main class="main">
   <div class="chat-header">
-    <div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()">&#9776;</button>
       <span class="engine-label" id="engineLabel">Select an engine</span>
       <span class="session-info" id="sessionInfo"></span>
     </div>
@@ -275,6 +299,7 @@ async function selectConversation(id) {
   if (!conv) return;
   currentEngine = engines.find(e => e.id === conv.engine_id);
   $('engineLabel').textContent = currentEngine?.label || conv.engine_id;
+  closeSidebar();
   sessionInfo.textContent = '';
   inputEl.disabled = false;
   sendBtn.disabled = false;
@@ -548,6 +573,12 @@ inputEl.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
+
+// ── Mobile sidebar ──
+const sidebarEl = document.querySelector('.sidebar');
+const overlayEl = $('sidebarOverlay');
+function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('visible'); }
+function closeSidebar() { sidebarEl.classList.remove('open'); overlayEl.classList.remove('visible'); }
 
 // ── Start ──
 init();
