@@ -598,6 +598,23 @@ const overlayEl = $('sidebarOverlay');
 function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('visible'); }
 function closeSidebar() { sidebarEl.classList.remove('open'); overlayEl.classList.remove('visible'); }
 
+// ── iOS Safari keyboard viewport fix ──
+// iOS Safari doesn't support interactive-widget=resizes-content,
+// so we use visualViewport API to adjust height when keyboard appears.
+// Only apply on iOS to avoid double-shrink on Chrome Android.
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+if (isIOS && window.visualViewport) {
+  const mainEl = document.querySelector('.main');
+  function onVVResize() {
+    const h = window.visualViewport.height;
+    document.body.style.height = h + 'px';
+    mainEl.style.height = h + 'px';
+    // Scroll messages to bottom so latest content stays visible
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+  window.visualViewport.addEventListener('resize', onVVResize);
+}
+
 // ── Start ──
 init();
 </script>
