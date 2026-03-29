@@ -30,17 +30,21 @@ opendaemon/
 ├── config.json           # Actual config with secrets (gitignored)
 ├── server.mjs            # Main server: routing, auth, engine dispatch
 ├── lib/
-│   ├── config.mjs        # Config loader + validation + cache
-│   ├── db.mjs            # SQLite schema + CRUD (conversations, messages, traces, knowledge, evolution)
+│   ├── config.mjs        # Config loader + validation + cache (incl. P3 sections)
+│   ├── db.mjs            # SQLite schema + CRUD (conversations, messages, traces, knowledge, evolution, sub_agent_runs, evaluations, experiments, self_coded_tools)
 │   ├── auth.mjs          # Cookie-based auth (HMAC-signed tokens)
 │   ├── engine-claude.mjs # Claude Agent SDK adapter (accepts injected context)
 │   ├── engine-openai.mjs # OpenAI-compatible adapter (streaming + function calling)
-│   ├── mcp-manager.mjs   # Long-running MCP subprocess manager (JSON-RPC over stdio)
-│   ├── trace.mjs         # Trace capture + query + evolution_log helper
+│   ├── mcp-manager.mjs   # Long-running MCP subprocess manager (JSON-RPC over stdio) + hot-reload
+│   ├── trace.mjs         # Trace capture + query + evolution_log helper (sub-agent trace linking)
 │   ├── knowledge.mjs     # Knowledge CRUD (Markdown files + SQLite index)
-│   ├── injector.mjs      # Build augmented context from knowledge for injection
-│   ├── reflect.mjs       # Reflection engine: build prompt, parse insights, manage pending
-│   └── evolution.mjs     # Evolution trigger manager (strategy-based reflection scheduling)
+│   ├── injector.mjs      # Build augmented context from knowledge for injection (A/B override support)
+│   ├── reflect.mjs       # Reflection engine: build prompt, parse insights, manage pending (evaluator + self-coder integration)
+│   ├── evolution.mjs     # Evolution trigger manager (strategy-based reflection scheduling)
+│   ├── orchestrator.mjs  # Sub-agent orchestration: decompose, dispatch, synthesize (Phase 3)
+│   ├── evaluator.mjs     # Knowledge evaluation: before/after quality scoring (Phase 3)
+│   ├── ab-testing.mjs    # A/B testing: experiment management, variant selection (Phase 3)
+│   └── self-coder.mjs    # Self-coding: tool proposal, generation, validation, installation (Phase 3)
 ├── public/
 │   ├── index.html        # Main UI (sidebar + chat + engine switching)
 │   └── login.html        # Login page
@@ -62,8 +66,11 @@ opendaemon/
 │   │   └── cron_task.py  # Periodic scheduled tasks
 │   └── data/             # Runtime data (gitignored)
 ├── data/                 # Runtime data (gitignored)
-│   ├── opendaemon.db     # SQLite database (conversations, messages, traces, knowledge_index, reflections, pending_insights, evolution_log, evolution_state)
+│   ├── opendaemon.db     # SQLite database
 │   ├── goals.md          # User-defined growth goals (guides reflection)
+│   ├── system_prompt_override.md    # A/B testing: system prompt variant override
+│   ├── injection_template_override.md # A/B testing: injection template variant override
+│   ├── reflection_prompt_override.md  # A/B testing: reflection prompt variant override
 │   └── knowledge/        # Human-readable learned knowledge (Markdown)
 │       ├── preferences.md
 │       ├── patterns.md
@@ -72,7 +79,9 @@ opendaemon/
 └── specs/                # Spec-driven development artifacts
     ├── 001-platform-foundation/
     ├── 002-mcp-capability-layer/
-    └── 003-self-evolution/
+    ├── 003-self-evolution/
+    ├── 004-file-upload/
+    └── 005-advanced-harness/
 ```
 
 ## Architecture
@@ -106,6 +115,33 @@ engine-claude    engine-openai
                           ▼       ▼       ▼       ▼          ▼
                      DuckDuckGo  Channels Bark  Timer+JSON  Scheduler+JSON
                               (WeChat/Feishu/Bark)
+```
+
+### Advanced Harness (Phase 3)
+
+```
+Sub-Agent Orchestration:
+  User prompt → orchestrator.shouldDispatch() (auto/explicit/disabled)
+       → if multi-task: decompose → spawn sub-agents in parallel
+       → each sub-agent: tailored system prompt + restricted tools + own trace
+       → collect results → synthesize into final response
+  Agent types: researcher (🔍), analyst (📊), coder (💻), reviewer (🔎)
+
+Knowledge Evaluation:
+  Knowledge accepted → evaluator.queueEvaluation()
+       → background: find relevant traces → generate response with/without knowledge
+       → judge LLM scores (relevance, accuracy, helpfulness, conciseness)
+       → delta > 0 → "passed" | delta ≤ 0 → "failed" (flagged for review)
+
+A/B Testing:
+  Create experiment → assign variant per conversation (alternating)
+       → track feedback per variant → auto-decide winner at threshold
+       → apply winner to override file (system_prompt / injection_template / reflection_prompt)
+
+Self-Coding:
+  Reflection detects repeated pattern → propose MCP tool
+       → user approves → generate Python code → validate syntax → install
+       → hot-reload MCP server → tool available in next conversation
 ```
 
 ### Self-Evolution Loop (Phase 2)
@@ -163,12 +199,19 @@ conversations (id TEXT PK, title, engine_id, sdk_session, created_at, updated_at
 messages (id INTEGER PK, conv_id FK, role, content, metadata JSON, created_at)
 
 -- Phase 2: Self-Evolution
-traces (id INTEGER PK, conv_id FK, msg_id FK, engine_id, prompt_summary, tools_used JSON, input_tokens, output_tokens, estimated_cost, response_len, duration_ms, feedback, feedback_note, injected_knowledge JSON, created_at)
+traces (id INTEGER PK, conv_id FK, msg_id FK, engine_id, prompt_summary, tools_used JSON, input_tokens, output_tokens, estimated_cost, response_len, duration_ms, feedback, feedback_note, injected_knowledge JSON, parent_trace_id INTEGER, created_at)
 knowledge_index (id INTEGER PK, category, title, tags, file_path, line_start, line_end, source_type, confidence, created_at, updated_at)
 reflections (id INTEGER PK, engine_id, trace_start, trace_end, trace_count, insights_raw, insights_accepted, insights_auto_accepted, trigger_reason, reflection_tokens, reflection_cost, created_at)
 pending_insights (id INTEGER PK, reflection_id FK, category, title, tags, content, confidence, status, created_at)
 evolution_log (id INTEGER PK, event_type, event_data JSON, created_at)
 evolution_state (id=1, last_reflection_at, bad_feedback_since_last, conv_since_last, updated_at)
+
+-- Phase 3: Advanced Harness
+sub_agent_runs (id INTEGER PK, parent_conv_id FK, parent_trace_id FK, agent_type, agent_config JSON, input_context, output_result, status, engine_id, input_tokens, output_tokens, estimated_cost, duration_ms, created_at, completed_at)
+evaluations (id INTEGER PK, knowledge_id FK, status, trace_ids JSON, scores_without JSON, scores_with JSON, score_delta REAL, judge_reasoning, engine_id, eval_tokens, eval_cost, created_at, completed_at)
+experiments (id INTEGER PK, name, surface, status, variant_a JSON, variant_b JSON, conversations_a, conversations_b, feedback_a JSON, feedback_b JSON, min_conversations, winner, created_at, completed_at)
+experiment_assignments (id INTEGER PK, experiment_id FK, conv_id FK, variant, created_at)
+self_coded_tools (id INTEGER PK, tool_name UNIQUE, description, input_schema JSON, code, origin_reflection_id, origin_pattern, status, test_result, proposed_at, installed_at, created_at)
 ```
 
 ### Config Structure (`config.json`)
@@ -272,7 +315,8 @@ Small changes (bug fixes, config additions) skip SDD and go directly to implemen
 - **Phase 0**: Platform foundation (DONE) — multi-engine, auth, sessions, web UI
 - **Phase 1**: MCP capability layer (DONE) — Python MCP Server with web_search, send_message, notify, reminder, cron_task
 - **Phase 2**: Self-evolution (DONE) — trace capture, knowledge base (Markdown + SQLite), context injection, reflection engine, evolution trigger strategies (manual/conservative/balanced/aggressive/custom), feedback UI, knowledge/goals/reflect panel
-- **Phase 3**: Advanced harness — sub-agents, evaluator, prompt optimization, self-coding
+- **Phase 3**: Advanced harness (DONE) — sub-agent orchestration, knowledge evaluator, A/B prompt testing, self-coding MCP tools
+- **Phase 4**: TBD
 
 ## Origins
 

@@ -297,6 +297,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .k-entry-actions { display: flex; gap: 6px; }
 .k-entry-actions button { background: none; border: none; color: var(--text-3); cursor: pointer; font-size: 12px; }
 .k-entry-actions button:hover { color: var(--accent); }
+.eval-details.expanded { display: block !important; }
 
 /* Goals editor */
 .goals-editor { width: 100%; min-height: 200px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: monospace; font-size: 13px; padding: 12px; resize: vertical; }
@@ -447,7 +448,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
       <div class="evo-tab" onclick="switchEvoTab('stats',this)">Stats</div>
       <div class="evo-tab" onclick="switchEvoTab('agents',this)">Agents</div>
       <div class="evo-tab" onclick="switchEvoTab('experiments',this)">A/B</div>
-      <div class="evo-tab" onclick="switchEvoTab('tools',this)">Tools</div>
+      <div class="evo-tab" onclick="switchEvoTab('tools',this)">Tools <span id="toolsBadge"></span></div>
     </div>
     <div class="evo-body" id="evoBody"></div>
   </div>
@@ -1480,6 +1481,7 @@ function openEvolutionPanel() {
   $('evoOverlay').classList.add('open');
   switchEvoTab('knowledge', document.querySelector('.evo-tab'));
   loadPendingBadge();
+  loadToolsBadge();
 }
 function closeEvolutionPanel() { $('evoOverlay').classList.remove('open'); }
 function switchEvoTab(tab, el) {
@@ -1537,6 +1539,7 @@ async function loadKnowledgeTab(body) {
             <div class="k-entry-meta">Tags: ${esc(item.tags || 'none')} · Confidence: ${(item.confidence || 0).toFixed(1)} · ${item.source_type}</div>
           </div>
           <div class="k-entry-actions" onclick="event.stopPropagation()">
+            <button onclick="evalKEntry(${item.id}, this)" title="Run evaluation">📊</button>
             <button onclick="deleteKEntry(${item.id})">🗑️</button>
           </div>
         </div>
@@ -1564,6 +1567,20 @@ async function deleteKEntry(id) {
   if (!confirm('Delete this knowledge entry?')) return;
   await api('DELETE', `/api/knowledge/${id}`);
   loadEvoTab('knowledge');
+}
+
+async function evalKEntry(id, btn) {
+  const orig = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/api/evaluations/run', { knowledge_id: id });
+    btn.textContent = res.status === 'passed' ? '✅' : res.status === 'failed' ? '⚠️' : '✔️';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+  } catch (err) {
+    btn.textContent = '❌';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+  }
 }
 
 async function loadGoalsTab(body) {
@@ -1954,7 +1971,10 @@ async function loadAgentsTab(body) {
     try {
       const evalStats = await api('GET', '/api/evaluations/stats');
       html += `<div class="evo-section" style="margin-top:16px;">
-        <h3>Knowledge Evaluator</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h3>Knowledge Evaluator</h3>
+          <button class="p4-btn primary" onclick="runNextEval(this)">▶ Run Next Evaluation</button>
+        </div>
         <div class="stats-grid">
           <div class="stat-card"><div class="stat-value">${evalStats.total||0}</div><div class="stat-label">Total Evaluations</div></div>
           <div class="stat-card"><div class="stat-value">${evalStats.passed||0}</div><div class="stat-label">Passed ✅</div></div>
@@ -1969,12 +1989,21 @@ async function loadAgentsTab(body) {
         html += `<div class="evo-section" style="margin-top:12px;"><h3>Recent Evaluations</h3>`;
         for (const ev of evals) {
           const delta = ev.score_delta != null ? (ev.score_delta > 0 ? `+${ev.score_delta.toFixed(2)}` : ev.score_delta.toFixed(2)) : '—';
-          html += `<div class="p4-card">
+          const swo = ev.scores_without != null ? JSON.stringify(ev.scores_without) : '—';
+          const sw = ev.scores_with != null ? JSON.stringify(ev.scores_with) : '—';
+          html += `<div class="p4-card" style="cursor:pointer;" onclick="this.querySelector('.eval-details').classList.toggle('expanded')">
             <div class="p4-card-header">
               <span class="p4-card-title">Knowledge #${ev.knowledge_id}</span>
               <span class="p4-status ${ev.status}">${esc(ev.status)}</span>
             </div>
-            <div class="p4-card-meta">Delta: ${delta} | ${ev.judge_reasoning ? esc(ev.judge_reasoning.substring(0,100)) : ''}</div>
+            <div class="p4-card-meta">Delta: ${delta} | ${ev.judge_reasoning ? esc(ev.judge_reasoning.substring(0,100)) + '…' : ''}</div>
+            <div class="eval-details" style="display:none;margin-top:8px;padding:8px;background:var(--code-bg);border-radius:6px;font-size:12px;line-height:1.5;">
+              <div><strong>Scores without:</strong> ${esc(swo)}</div>
+              <div><strong>Scores with:</strong> ${esc(sw)}</div>
+              <div><strong>Score delta:</strong> ${delta}</div>
+              <div style="margin-top:4px;"><strong>Judge reasoning:</strong></div>
+              <div style="white-space:pre-wrap;color:var(--text-2);">${esc(ev.judge_reasoning || '(none)')}</div>
+            </div>
           </div>`;
         }
         html += `</div>`;
@@ -2160,6 +2189,29 @@ async function enableTool(id) {
     await api('POST', `/api/self-coded-tools/${id}/enable`);
     loadEvoTab('tools');
   } catch (err) { alert(err.message); }
+}
+
+async function runNextEval(btn) {
+  const orig = btn.textContent;
+  btn.textContent = 'Running...';
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/api/evaluations/run');
+    btn.textContent = res.status ? `Done: ${res.status}` : 'Done';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; loadEvoTab('agents'); }, 2000);
+  } catch (err) {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+  }
+}
+
+async function loadToolsBadge() {
+  try {
+    const tools = await api('GET', '/api/self-coded-tools');
+    const proposed = tools.filter(t => t.status === 'proposed' || t.status === 'generated' || t.status === 'validated').length;
+    const badge = $('toolsBadge');
+    if (badge) badge.textContent = proposed > 0 ? `(${proposed})` : '';
+  } catch {}
 }
 
 // ── Start ──
