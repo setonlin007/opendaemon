@@ -341,7 +341,12 @@ async function selectConversation(id) {
       if (m.role === 'user') addUserBubble(m.content);
       else addAssistantBubble(m.content);
     }
+    // Ensure scroll happens after browser has laid out all content
     scrollToBottom();
+    // Double-RAF to guarantee layout is complete (images, code blocks, etc.)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }));
   }
 }
 
@@ -528,7 +533,7 @@ function finishStreaming() {
   inputEl.focus();
 }
 function setStatus(cls, text) { statusBadge.className = 'status ' + cls; statusBadge.textContent = text; }
-function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+function scrollToBottom() { requestAnimationFrame(() => { messagesEl.scrollTop = messagesEl.scrollHeight; }); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ── Bubble helpers ──
