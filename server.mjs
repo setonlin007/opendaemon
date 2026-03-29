@@ -254,6 +254,33 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Serve files from data/ directory (for daemon-generated files) ──
+
+  if (method === "GET" && path.startsWith("/api/files/")) {
+    const relativePath = decodeURIComponent(path.substring("/api/files/".length));
+    // Security: block path traversal
+    if (relativePath.includes("..") || relativePath.startsWith("/")) {
+      res.writeHead(403); res.end("Forbidden"); return;
+    }
+    const filePath = join(__dirname, "data", relativePath);
+    if (!filePath.startsWith(join(__dirname, "data"))) {
+      res.writeHead(403); res.end("Forbidden"); return;
+    }
+    if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+      res.writeHead(404); res.end("Not Found"); return;
+    }
+    const ext = filePath.substring(filePath.lastIndexOf("."));
+    const contentType = MIME[ext] || "application/octet-stream";
+    const fileName = relativePath.split("/").pop();
+    res.writeHead(200, {
+      "Content-Type": contentType,
+      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Length": statSync(filePath).size,
+    });
+    res.end(readFileSync(filePath));
+    return;
+  }
+
   // ── Chat (SSE streaming) ──
 
   if (method === "POST" && path === "/api/chat") {
