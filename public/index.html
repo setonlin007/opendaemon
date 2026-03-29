@@ -270,6 +270,54 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .evo-btn { background: none; border: 1px solid var(--border); color: var(--text-2); padding: 3px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; }
 .evo-btn:hover { color: var(--accent); border-color: var(--accent); }
 
+/* ── About / Guide Panel ── */
+.about-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 300; backdrop-filter: blur(4px); }
+.about-overlay.open { display: flex; align-items: center; justify-content: center; }
+.about-panel { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 16px; width: 94vw; max-width: 860px; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.5); }
+.about-header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; }
+.about-header h2 { font-size: 18px; font-weight: 800; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.about-nav { display: flex; gap: 0; padding: 12px 24px 0; border-bottom: 1px solid var(--border); }
+.about-nav-item { padding: 10px 18px; font-size: 13px; font-weight: 500; color: var(--text-3); cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.2s; }
+.about-nav-item:hover { color: var(--text); }
+.about-nav-item.active { color: var(--accent); border-bottom-color: var(--accent); }
+.about-body { flex: 1; overflow-y: auto; padding: 24px; line-height: 1.7; }
+.about-body h3 { font-size: 16px; font-weight: 700; color: var(--text); margin: 20px 0 10px; }
+.about-body h3:first-child { margin-top: 0; }
+.about-body h4 { font-size: 14px; font-weight: 600; color: var(--text-2); margin: 16px 0 8px; }
+.about-body p { font-size: 13.5px; color: var(--text-2); margin-bottom: 12px; }
+.about-body ul, .about-body ol { padding-left: 20px; margin-bottom: 12px; }
+.about-body li { font-size: 13.5px; color: var(--text-2); margin-bottom: 6px; }
+.about-body code { background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font-size: 12px; color: #e94560; }
+.about-body .about-hero { text-align: center; padding: 20px 0 10px; }
+.about-body .about-hero .hero-icon { font-size: 48px; margin-bottom: 8px; }
+.about-body .about-hero .hero-tagline { font-size: 15px; color: var(--text-3); font-style: italic; }
+.about-body .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+@media (max-width: 600px) { .about-body .feature-grid { grid-template-columns: 1fr; } }
+.about-body .feature-card { background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.about-body .feature-card .fc-icon { font-size: 24px; margin-bottom: 6px; }
+.about-body .feature-card .fc-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.about-body .feature-card .fc-desc { font-size: 12px; color: var(--text-3); line-height: 1.5; }
+.about-body .arch-box { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: monospace; font-size: 12px; line-height: 1.6; color: var(--text-2); white-space: pre; overflow-x: auto; margin: 12px 0; }
+.about-body .version-timeline { position: relative; padding-left: 20px; }
+.about-body .version-timeline::before { content: ''; position: absolute; left: 6px; top: 4px; bottom: 4px; width: 2px; background: var(--border); }
+.about-body .vt-item { position: relative; margin-bottom: 20px; }
+.about-body .vt-item::before { content: ''; position: absolute; left: -18px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--sidebar-bg); }
+.about-body .vt-item.current::before { background: #4ade80; box-shadow: 0 0 8px rgba(74,222,128,0.5); }
+.about-body .vt-ver { font-size: 14px; font-weight: 700; color: var(--text); }
+.about-body .vt-date { font-size: 11px; color: var(--text-3); margin-left: 8px; }
+.about-body .vt-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-left: 6px; }
+.about-body .vt-tag.latest { background: #1a3a1a; color: #4ade80; }
+.about-body .vt-tag.stable { background: #1a2a3a; color: #60a5fa; }
+.about-body .vt-changes { margin-top: 6px; }
+.about-body .vt-changes li { font-size: 12px; color: var(--text-3); margin-bottom: 3px; }
+.about-body .kbd { display: inline-block; padding: 2px 7px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; font-family: monospace; color: var(--text-2); }
+.about-body .tip-box { background: rgba(233,69,96,0.08); border: 1px solid rgba(233,69,96,0.2); border-radius: 8px; padding: 12px 16px; margin: 12px 0; font-size: 13px; }
+.about-body .tip-box .tip-label { font-weight: 700; color: var(--accent); margin-right: 6px; }
+.about-body table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12.5px; }
+.about-body th { text-align: left; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text-2); font-weight: 600; font-size: 12px; }
+.about-body td { padding: 8px 10px; border: 1px solid var(--border); color: var(--text-3); }
+.sidebar-header h1 { cursor: pointer; }
+
 .evo-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; }
 .evo-overlay.open { display: flex; align-items: center; justify-content: center; }
 .evo-panel { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 12px; width: 90vw; max-width: 700px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -363,7 +411,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 <!-- Sidebar -->
 <aside class="sidebar">
   <div class="sidebar-header">
-    <h1>OpenDaemon</h1>
+    <h1 onclick="openAboutPanel()">OpenDaemon</h1>
     <button class="btn-new" onclick="newChat()">+ New</button>
   </div>
   <div class="engine-select">
@@ -371,7 +419,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   </div>
   <div class="conv-list" id="convList"></div>
   <div class="sidebar-footer">
-    <span>v0.2.0</span>
+    <span style="cursor:pointer" onclick="openAboutPanel();switchAboutTab('changelog',document.querySelectorAll('.about-nav-item')[3])">v0.5.0</span>
     <button class="evo-btn" onclick="openEvolutionPanel()">🧠 Evolution</button>
     <a href="/api/logout">Logout</a>
   </div>
@@ -435,6 +483,23 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 </main>
 
 <!-- Evolution Panel -->
+<!-- About / Guide Panel -->
+<div class="about-overlay" id="aboutOverlay" onclick="if(event.target===this)closeAboutPanel()">
+  <div class="about-panel">
+    <div class="about-header">
+      <h2>OpenDaemon</h2>
+      <button class="evo-close" onclick="closeAboutPanel()">&times;</button>
+    </div>
+    <div class="about-nav" id="aboutNav">
+      <div class="about-nav-item active" onclick="switchAboutTab('intro',this)">产品介绍</div>
+      <div class="about-nav-item" onclick="switchAboutTab('guide',this)">使用指南</div>
+      <div class="about-nav-item" onclick="switchAboutTab('features',this)">功能说明</div>
+      <div class="about-nav-item" onclick="switchAboutTab('changelog',this)">版本历史</div>
+    </div>
+    <div class="about-body" id="aboutBody"></div>
+  </div>
+</div>
+
 <div class="evo-overlay" id="evoOverlay" onclick="if(event.target===this)closeEvolutionPanel()">
   <div class="evo-panel">
     <div class="evo-header">
@@ -1481,6 +1546,360 @@ startHealthCheck();
 
 // ── Evolution Panel ──
 let currentEvoTab = 'knowledge';
+
+// ── About / Guide Panel ──
+function openAboutPanel() {
+  $('aboutOverlay').classList.add('open');
+  switchAboutTab('intro', document.querySelector('.about-nav-item'));
+}
+function closeAboutPanel() { $('aboutOverlay').classList.remove('open'); }
+function switchAboutTab(tab, el) {
+  document.querySelectorAll('.about-nav-item').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const body = $('aboutBody');
+  if (tab === 'intro') body.innerHTML = renderAboutIntro();
+  else if (tab === 'guide') body.innerHTML = renderAboutGuide();
+  else if (tab === 'features') body.innerHTML = renderAboutFeatures();
+  else if (tab === 'changelog') body.innerHTML = renderAboutChangelog();
+}
+
+function renderAboutIntro() {
+  return `
+<div class="about-hero">
+  <div class="hero-icon">🧬</div>
+  <h3 style="margin:0;font-size:22px;">OpenDaemon</h3>
+  <p class="hero-tagline">A Self-Evolving AI Agent Harness</p>
+</div>
+
+<p>OpenDaemon 是一个<strong>自进化 AI 代理框架</strong>。它不构建 LLM 引擎本身，而是在任何 LLM 之上搭建一层智能 Harness（线束），让 AI 在<strong>你的场景</strong>中越用越好。</p>
+
+<p>每一次对话都会被追踪、反思、沉淀为知识，再注入到未来的对话中 —— 形成一个持续进化的闭环。</p>
+
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="fc-icon">🔌</div>
+    <div class="fc-title">多引擎统一接入</div>
+    <div class="fc-desc">Claude SDK、OpenAI、DeepSeek、Kimi 等任意 LLM，统一 SSE 流式输出，一键切换</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-icon">🧠</div>
+    <div class="fc-title">自进化知识系统</div>
+    <div class="fc-desc">自动追踪交互 → 反思提炼 → 沉淀知识 → 注入上下文，越用越懂你</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-icon">🛠️</div>
+    <div class="fc-title">MCP 工具生态</div>
+    <div class="fc-desc">搜索、消息推送（微信/飞书/Bark）、定时提醒、Cron 任务，开箱即用</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-icon">🤖</div>
+    <div class="fc-title">高级 Harness</div>
+    <div class="fc-desc">Sub-Agent 子代理编排、知识评估器、A/B Prompt 优化、Self-Coding 自编码</div>
+  </div>
+</div>
+
+<h3>核心理念</h3>
+<ul>
+  <li><strong>用户主权</strong> — 所有数据本地存储，知识可审计，AI 进化方向由你定义</li>
+  <li><strong>引擎无关</strong> — 不绑定任何 LLM 供应商，自由切换</li>
+  <li><strong>轻量部署</strong> — 单机 Node.js + SQLite，无需 Docker/K8s，10 分钟上线</li>
+  <li><strong>渐进增强</strong> — 从简单聊天到自进化代理，按需开启功能模块</li>
+</ul>
+
+<div class="arch-box">Browser ──→ server.mjs ──→ Auth ──→ Route Dispatch
+                │
+   ┌────────────┼────────────┐
+   ▼            ▼            ▼
+ /api/chat   /api/conv*   /api/engines
+   │
+   ├── injector (知识注入) ──→ orchestrator (子代理编排)
+   │
+   ├── engine-claude (SDK)   engine-openai (fetch+SSE)
+   │         │                      │
+   │         └──── MCP Manager ─────┘
+   │                    │
+   │              mcp/server.py
+   │              ├── web_search  ├── send_message
+   │              ├── notify      ├── reminder
+   │              └── cron_task   └── [self-coded tools]
+   │
+   └── trace → reflect → knowledge → inject (进化闭环)</div>
+`;
+}
+
+function renderAboutGuide() {
+  return `
+<h3>🚀 快速开始</h3>
+
+<h4>1. 基础对话</h4>
+<ul>
+  <li>左上角选择 AI 引擎（Claude / DeepSeek / Kimi 等）</li>
+  <li>点击 <code>+ New</code> 创建新对话</li>
+  <li>在底部输入框输入消息，按 <span class="kbd">Enter</span> 发送</li>
+  <li><span class="kbd">Shift + Enter</span> 换行，不发送</li>
+  <li>支持语音输入（点击 🎤 按钮）</li>
+</ul>
+
+<h4>2. 对话管理</h4>
+<ul>
+  <li>左侧列表按时间分组（今天 / 昨天 / 更早）</li>
+  <li>悬停对话条目可见 <code>×</code> 删除按钮</li>
+  <li>对话标题会根据首条消息自动生成</li>
+  <li>随时切换引擎 — 不同对话可以使用不同引擎</li>
+</ul>
+
+<h4>3. 反馈系统</h4>
+<p>每条 AI 回复下方有 👍 / 👎 按钮。你的反馈是进化系统的核心信号：</p>
+<ul>
+  <li><strong>👍 好评</strong> — 告诉系统这类回复符合期望</li>
+  <li><strong>👎 差评</strong> — 触发系统反思，累积到阈值自动启动知识提炼</li>
+</ul>
+
+<div class="tip-box">
+  <span class="tip-label">💡 建议：</span>
+  积极使用反馈按钮，尤其是差评 — 这是推动 AI 进化最有效的方式。
+</div>
+
+<h3>🧠 进化系统</h3>
+<p>点击左下角 <code>🧠 Evolution</code> 打开进化面板：</p>
+
+<table>
+  <tr><th>标签页</th><th>功能</th><th>操作说明</th></tr>
+  <tr><td><strong>Knowledge</strong></td><td>已学习的知识库</td><td>点击展开详情，可删除不适用的知识</td></tr>
+  <tr><td><strong>Goals</strong></td><td>成长目标</td><td>定义你希望 AI 往什么方向进化（Markdown）</td></tr>
+  <tr><td><strong>Reflect</strong></td><td>手动反思</td><td>点击触发一次知识提炼，查看原始输出</td></tr>
+  <tr><td><strong>Pending</strong></td><td>待审核洞察</td><td>系统提炼的新知识，需你接受或拒绝</td></tr>
+  <tr><td><strong>Stats</strong></td><td>进化统计</td><td>对话数、知识数、反馈比例、Token 成本</td></tr>
+  <tr><td><strong>Agents</strong></td><td>子代理</td><td>查看编排配置和历史运行记录</td></tr>
+  <tr><td><strong>A/B</strong></td><td>提示词实验</td><td>创建和管理 A/B 测试实验</td></tr>
+  <tr><td><strong>Tools</strong></td><td>自编码工具</td><td>审批、启用/禁用 AI 自动生成的 MCP 工具</td></tr>
+</table>
+
+<h3>🛠️ MCP 工具使用</h3>
+<p>Claude SDK 引擎会自动调用 MCP 工具。以下是内置工具：</p>
+
+<table>
+  <tr><th>工具</th><th>触发方式</th><th>示例</th></tr>
+  <tr><td><code>web_search</code></td><td>需要搜索时自动调用</td><td>"帮我搜索 xxx 最新消息"</td></tr>
+  <tr><td><code>send_message</code></td><td>需要发消息时自动调用</td><td>"发飞书消息给 xxx"</td></tr>
+  <tr><td><code>notify</code></td><td>需要推送通知时</td><td>"给我推送一条 Bark 通知"</td></tr>
+  <tr><td><code>set_reminder</code></td><td>设定一次性提醒</td><td>"10分钟后提醒我开会"</td></tr>
+  <tr><td><code>cron_task</code></td><td>设定定时任务</td><td>"每天早上9点提醒我站会"</td></tr>
+</table>
+
+<h3>⌨️ 快捷键</h3>
+<table>
+  <tr><th>快捷键</th><th>功能</th></tr>
+  <tr><td><span class="kbd">Enter</span></td><td>发送消息</td></tr>
+  <tr><td><span class="kbd">Shift + Enter</span></td><td>换行</td></tr>
+  <tr><td><span class="kbd">Esc</span></td><td>停止生成</td></tr>
+</table>
+
+<h3>⚙️ 高级配置</h3>
+<p>编辑 <code>config.json</code> 可配置：</p>
+<ul>
+  <li><strong>引擎</strong> — 添加/切换 LLM 引擎及 API 密钥</li>
+  <li><strong>进化策略</strong> — <code>manual</code> / <code>conservative</code> / <code>balanced</code> / <code>aggressive</code></li>
+  <li><strong>子代理</strong> — 调度模式（auto / explicit / disabled）</li>
+  <li><strong>评估器</strong> — 知识自动评估开关和频率</li>
+  <li><strong>A/B 测试</strong> — 提示词实验开关</li>
+  <li><strong>自编码</strong> — 自动提议工具开关</li>
+  <li><strong>消息渠道</strong> — Bark / 飞书 / 微信推送配置</li>
+</ul>
+`;
+}
+
+function renderAboutFeatures() {
+  return `
+<h3>📡 多引擎架构</h3>
+<p>OpenDaemon 采用引擎无关设计，所有 LLM 都通过统一的 SSE 事件格式输出：</p>
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="fc-icon">C</div>
+    <div class="fc-title">Claude SDK</div>
+    <div class="fc-desc">Anthropic 原生 Agent SDK，支持 MCP 工具调用、Thinking、Sub-Agent，最完整体验</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-icon">O</div>
+    <div class="fc-title">OpenAI Compatible</div>
+    <div class="fc-desc">兼容所有 OpenAI 格式的 API：GPT、DeepSeek、Kimi K2、Qwen、本地模型等</div>
+  </div>
+</div>
+
+<h3>🔄 自进化闭环</h3>
+<p>这是 OpenDaemon 的核心差异化功能 —— 让 AI 从每次交互中学习并持续进步。</p>
+
+<h4>闭环流程</h4>
+<div class="arch-box">对话 → 追踪(Trace) → 反思(Reflect) → 洞察(Insight) → 知识(Knowledge) → 注入(Inject) → 更好的对话
+  ↑                                                                                              │
+  └──────────────────────── 反馈(Feedback) ← ───────────────────────────────────────────────────────┘</div>
+
+<h4>追踪 (Trace)</h4>
+<p>每条对话自动记录：引擎、Token 用量、工具调用、响应时间、注入的知识、用户反馈。这些数据是反思的原料。</p>
+
+<h4>反思 (Reflect)</h4>
+<p>当达到触发条件（差评积累 / 对话数阈值 / 手动触发），系统将近期 Trace 发送给 LLM 进行反思，结合你定义的 Goals 提炼出新的知识洞察。</p>
+
+<h4>知识注入 (Inject)</h4>
+<p>每次对话前，系统自动从知识库中匹配相关条目（基于标签匹配），注入到 System Prompt 中，让 AI 带着已学习的知识回答。</p>
+
+<h3>🤖 子代理编排 (Sub-Agents)</h3>
+<p>对于复杂的多步骤任务，OpenDaemon 可将请求拆分为子任务，分派给专门的子代理并行处理：</p>
+
+<table>
+  <tr><th>代理类型</th><th>图标</th><th>职责</th><th>工具权限</th></tr>
+  <tr><td>Researcher</td><td>🔍</td><td>网络搜索 & 信息收集</td><td>web_search</td></tr>
+  <tr><td>Analyst</td><td>📊</td><td>数据分析 & 结构化对比</td><td>无（仅上下文）</td></tr>
+  <tr><td>Coder</td><td>💻</td><td>代码编写 & 审查</td><td>文件系统</td></tr>
+  <tr><td>Reviewer</td><td>🔎</td><td>质量检查 & 事实核查</td><td>web_search</td></tr>
+</table>
+
+<p>调度模式：</p>
+<ul>
+  <li><code>auto</code> — AI 自动判断是否需要拆分（默认）</li>
+  <li><code>explicit</code> — 通过 <code>/research</code>、<code>/analyze</code>、<code>/review</code>、<code>/code</code> 命令手动触发</li>
+  <li><code>disabled</code> — 关闭子代理</li>
+</ul>
+
+<h3>📊 知识评估器 (Evaluator)</h3>
+<p>自动验证已接受的知识是否真的提升了回复质量：</p>
+<ul>
+  <li>找到相关历史 Trace，生成有/无知识的两版回复</li>
+  <li>Judge LLM 按 4 维度评分：相关性、准确性、实用性、简洁性</li>
+  <li>delta &gt; 0 标记为 <code>passed</code>，否则 <code>failed</code> 待人工审核</li>
+  <li>后台空闲时自动运行，不阻塞对话</li>
+</ul>
+
+<h3>🧪 A/B 提示词优化</h3>
+<p>对系统提示的措辞、知识注入模板、反思提示进行 A/B 测试：</p>
+<ul>
+  <li>创建实验 → 每次对话随机分配变体 A/B</li>
+  <li>追踪各变体的用户反馈（👍/👎 比例）</li>
+  <li>达到最小对话数后自动判定优胜者并应用</li>
+  <li>同一时间只运行一个实验，避免干扰</li>
+</ul>
+
+<h3>🔧 自编码 (Self-Coding)</h3>
+<p>当 AI 在反思中发现可自动化的重复模式时，它会提议创建新的 MCP 工具：</p>
+<ul>
+  <li>AI 提议工具名称、描述、输入 Schema 和实现方案</li>
+  <li><strong>必须用户审批</strong> 后才会安装（安全第一）</li>
+  <li>自动语法校验 + 测试运行</li>
+  <li>安装后热重载 MCP Server，下次对话即可使用</li>
+  <li>随时可禁用/重新启用</li>
+</ul>
+
+<h3>📱 消息渠道</h3>
+<div class="feature-grid">
+  <div class="feature-card">
+    <div class="fc-icon">📱</div>
+    <div class="fc-title">Bark (iOS 推送)</div>
+    <div class="fc-desc">即时推送到 iPhone，支持定时提醒和 Cron 任务通知</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-icon">💬</div>
+    <div class="fc-title">飞书 Bot</div>
+    <div class="fc-desc">通过飞书 REST API 发送消息，支持 target_map 灵活路由</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-icon">🟢</div>
+    <div class="fc-title">微信 (HTTP 桥接)</div>
+    <div class="fc-desc">通过 Windows 端 HTTP 桥接发送微信消息</div>
+  </div>
+  <div class="feature-card">
+    <div class="fc-icon">🔍</div>
+    <div class="fc-title">Web Search</div>
+    <div class="fc-desc">DuckDuckGo 搜索，无需 API Key，即开即用</div>
+  </div>
+</div>
+`;
+}
+
+function renderAboutChangelog() {
+  return `
+<h3>版本历史</h3>
+<div class="version-timeline">
+
+  <div class="vt-item current">
+    <span class="vt-ver">v0.5.0</span>
+    <span class="vt-date">2026-03-29</span>
+    <span class="vt-tag latest">Latest</span>
+    <div class="vt-label" style="font-size:12px;color:var(--text-3);margin-top:2px;">Phase 5 — Advanced Harness</div>
+    <ul class="vt-changes">
+      <li>🤖 <strong>Sub-Agent 子代理编排</strong> — 复杂任务自动拆分，多代理并行处理</li>
+      <li>📊 <strong>Knowledge Evaluator 知识评估器</strong> — 自动验证知识质量，before/after 对比评分</li>
+      <li>🧪 <strong>A/B Testing 提示词优化</strong> — System prompt / 注入模板 / 反思提示的 A/B 实验</li>
+      <li>🔧 <strong>Self-Coding 自编码</strong> — AI 自动提议并生成新 MCP 工具</li>
+      <li>🔄 <strong>MCP Hot-Reload</strong> — 工具安装后无需重启即可使用</li>
+      <li>📊 手动 Evaluate 按钮 + 评估详情展开</li>
+      <li>🔔 Tools tab 通知 badge</li>
+      <li>⚙️ 新配置段校验（sub_agents / evaluator / ab_testing / self_coding）</li>
+    </ul>
+  </div>
+
+  <div class="vt-item">
+    <span class="vt-ver">v0.4.0</span>
+    <span class="vt-date">2026-03</span>
+    <span class="vt-tag stable">Stable</span>
+    <div class="vt-label" style="font-size:12px;color:var(--text-3);margin-top:2px;">Phase 4 — File Upload & UX</div>
+    <ul class="vt-changes">
+      <li>📎 <strong>文件上传</strong> — 拖拽 / 粘贴 / 按钮上传，支持图片、PDF、文档</li>
+      <li>🎤 <strong>语音输入</strong> — Web Speech API 实时语音转文字</li>
+      <li>🎨 <strong>输入栏重设计</strong> — 微信风格布局，附件预览</li>
+      <li>⏹️ <strong>Stop 按钮优化</strong> — 修复 Thinking 指示器残留</li>
+      <li>📜 <strong>智能滚动</strong> — 阅读历史时不强制跳到底部</li>
+    </ul>
+  </div>
+
+  <div class="vt-item">
+    <span class="vt-ver">v0.3.0</span>
+    <span class="vt-date">2026-03</span>
+    <span class="vt-tag stable">Stable</span>
+    <div class="vt-label" style="font-size:12px;color:var(--text-3);margin-top:2px;">Phase 3 — Self-Evolution</div>
+    <ul class="vt-changes">
+      <li>🧠 <strong>自进化系统</strong> — Trace 追踪 → 反思 → 知识提炼 → 上下文注入闭环</li>
+      <li>📝 <strong>知识库</strong> — Markdown 文件 + SQLite 索引，人机可读</li>
+      <li>🎯 <strong>Goals 成长目标</strong> — 用户定义 AI 进化方向</li>
+      <li>🔄 <strong>多策略触发</strong> — manual / conservative / balanced / aggressive / custom</li>
+      <li>👍👎 <strong>反馈系统</strong> — 每条回复可评价，驱动进化</li>
+      <li>📊 <strong>进化统计面板</strong> — Token 成本、知识数、反思历史</li>
+    </ul>
+  </div>
+
+  <div class="vt-item">
+    <span class="vt-ver">v0.2.0</span>
+    <span class="vt-date">2026-02</span>
+    <span class="vt-tag stable">Stable</span>
+    <div class="vt-label" style="font-size:12px;color:var(--text-3);margin-top:2px;">Phase 2 — MCP Capability Layer</div>
+    <ul class="vt-changes">
+      <li>🐍 <strong>Python MCP Server</strong> — stdio 传输，独立进程常驻</li>
+      <li>🔍 <strong>web_search</strong> — DuckDuckGo 搜索工具</li>
+      <li>📨 <strong>send_message</strong> — 统一消息发送（微信/飞书/Bark）</li>
+      <li>🔔 <strong>notify</strong> — Bark iOS 推送</li>
+      <li>⏰ <strong>set_reminder</strong> — 一次性定时提醒</li>
+      <li>📅 <strong>cron_task</strong> — 周期性定时任务</li>
+      <li>🔌 <strong>Channel 抽象层</strong> — Bark / 飞书 / 微信插件化</li>
+    </ul>
+  </div>
+
+  <div class="vt-item">
+    <span class="vt-ver">v0.1.0</span>
+    <span class="vt-date">2026-01</span>
+    <span class="vt-tag stable">Stable</span>
+    <div class="vt-label" style="font-size:12px;color:var(--text-3);margin-top:2px;">Phase 1 — Platform Foundation</div>
+    <ul class="vt-changes">
+      <li>🏗️ <strong>核心架构</strong> — Node.js + SQLite + 原生 HTTP</li>
+      <li>🔌 <strong>多引擎</strong> — Claude SDK + OpenAI-compatible 统一接入</li>
+      <li>🔐 <strong>认证</strong> — Cookie-based HMAC 签名 Token</li>
+      <li>💬 <strong>对话管理</strong> — 创建/切换/删除，消息持久化</li>
+      <li>📡 <strong>SSE 流式输出</strong> — 统一事件格式，引擎无关</li>
+      <li>🎨 <strong>Web UI</strong> — 单 HTML 文件，暗色主题，响应式</li>
+    </ul>
+  </div>
+
+</div>
+`;
+}
 
 function openEvolutionPanel() {
   $('evoOverlay').classList.add('open');
