@@ -1647,28 +1647,43 @@ function addStreamingBubble(partialContent) {
   div.dataset.streaming = '1';
   messagesEl.appendChild(div);
   let pollCount = 0;
-  const MAX_POLLS = 200; // 200 * 3s = 10 minutes max
+  const MAX_POLLS = 10; // 10 * 2s = 20 seconds max (page refresh recovery)
   const savedConvId = currentConvId;
-  const poll = setInterval(async () => {
+  const pollFn = async () => {
     pollCount++;
-    if (!currentConvId || currentConvId !== savedConvId || pollCount > MAX_POLLS) { clearInterval(poll); try { div.querySelector('.loading-indicator')?.remove(); } catch(e) {} delete div.dataset.streaming; return; }
+    if (!currentConvId || currentConvId !== savedConvId || pollCount > MAX_POLLS) {
+      clearInterval(poll);
+      // Timeout: fetch final state and render whatever is there
+      try {
+        const msgs = await api('GET', `/api/conversations/${currentConvId}/messages`);
+        const last = msgs[msgs.length - 1];
+        if (last && last.role === 'assistant' && last.content !== '...') {
+          div.querySelector('.bubble').innerHTML = renderMd(last.content.replace('<!-- streaming -->', ''));
+        } else {
+          div.remove(); // Remove empty bubble
+        }
+      } catch(e) { div.remove(); }
+      delete div.dataset.streaming;
+      return;
+    }
     try {
       const msgs = await api('GET', `/api/conversations/${currentConvId}/messages`);
       const last = msgs[msgs.length - 1];
-      if (!last || last.role !== 'assistant') { clearInterval(poll); return; }
+      if (!last || last.role !== 'assistant') { clearInterval(poll); div.remove(); return; }
       if (last.content.includes('<!-- streaming -->')) {
-        // Still streaming — update partial content
         div.querySelector('.bubble').innerHTML = renderMd(last.content.replace('<!-- streaming -->', '')) + spinnerHtml;
         scrollToBottom();
       } else if (last.content !== '...') {
-        // Done
         clearInterval(poll);
         div.querySelector('.bubble').innerHTML = renderMd(last.content);
         delete div.dataset.streaming;
         scrollToBottom();
       }
-    } catch(e) { clearInterval(poll); }
-  }, 3000);
+    } catch(e) { clearInterval(poll); div.remove(); }
+  };
+  // First poll immediately, then every 2 seconds
+  setTimeout(pollFn, 500);
+  const poll = setInterval(pollFn, 2000);
 }
 function createAssistantBubble() {
   const w = messagesEl.querySelector('.welcome'); if (w) w.remove();
