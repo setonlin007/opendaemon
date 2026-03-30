@@ -81,15 +81,19 @@ T4 (Claude SDK 配置) → T5
 - [ ] `testEngine(id)` — 调用测试接口，显示结果
 
 **JS — 添加/编辑表单:**
-- [ ] `showEngineForm(engine?)` — 渲染表单，有 engine 时为编辑模式
-- [ ] 类型选择器：Agentic / API，切换显示不同字段
-- [ ] Type A 表单：label, icon, model(下拉), apiKey, platform(下拉), effort(下拉), maxBudgetUsd
-- [ ] Type B 表单：label, icon, baseUrl, apiKey, model(文本)
-- [ ] `saveEngine()` — 调用 POST/PUT，成功后刷新列表
+- [x] `showEngineForm(engine?)` — 渲染表单，有 engine 时为编辑模式
+- [x] 类型选择器：Agentic / API，切换显示不同字段
+- [x] Agentic 选类型后 → 调 `/api/engine-types` 动态获取已安装 SDK → 用户先选 SDK 再配置
+- [x] `selectAgenticSDK(type)` — 选 SDK 后展示对应认证/配置表单
+- [x] Agentic 认证方式三选：OAuth / API Key / 自定义接口(URL+Key)
+- [x] `buildAgenticAuthFields(mode)` — 按认证方式动态渲染字段
+- [x] Type B 表单：label, icon, baseUrl, apiKey, model(文本)
+- [x] `saveEngine()` — 调用 POST/PUT，成功后刷新列表
 
 **JS — 预设模板:**
-- [ ] 预设数据：GPT-4o, Gemini 2.5 Pro, DeepSeek V3, Kimi K2, Claude Opus, Claude Sonnet, Ollama
-- [ ] 点击预设 → 自动填充表单，用户只需补 API Key
+- [x] 预设数据：GPT-4o, Gemini 2.5 Pro, DeepSeek V3, Kimi K2, Ollama
+- [x] 点击预设 → 自动填充表单，用户只需补 API Key
+- [x] Agentic 预设从插件注册表动态获取，不硬编码
 
 **JS — 对话内引擎切换:**
 - [ ] 对话头部引擎名可点击
