@@ -513,7 +513,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       </span>
-      <span class="footer-label">v0.5.0</span>
+      <span class="footer-label">v0.6.0</span>
     </button>
     <button class="footer-btn" onclick="window.location.href='/api/logout'">
       <span class="footer-icon">
@@ -2186,9 +2186,23 @@ function renderAboutChangelog() {
 <div class="version-timeline">
 
   <div class="vt-item current">
+    <span class="vt-ver">v0.6.0</span>
+    <span class="vt-date">2026-03-30</span>
+    <span class="vt-tag latest">Latest</span>
+    <div class="vt-label" style="font-size:12px;color:var(--text-3);margin-top:2px;">Memory Evolution</div>
+    <ul class="vt-changes">
+      <li>🧠 <strong>渐进式注入</strong> — Rules 全文注入 + 其他知识标题索引，LLM 按需展开详情</li>
+      <li>🔍 <strong>FTS5 全文搜索</strong> — 知识检索从 LIKE 升级为 SQLite FTS5，支持分词和相关性排名</li>
+      <li>📖 <strong>knowledge_detail MCP Tool</strong> — LLM 可按 ID 查询知识全文（渐进式注入 Layer 2）</li>
+      <li>📡 <strong>tech_buzz MCP Tool</strong> — 多源技术热点聚合（HN API / GitHub Trending / Reddit / X / HuggingFace）</li>
+      <li>⚙️ <strong>automation 知识类别</strong> — 反思引擎可生成自动化类知识</li>
+    </ul>
+  </div>
+
+  <div class="vt-item">
     <span class="vt-ver">v0.5.0</span>
     <span class="vt-date">2026-03-29</span>
-    <span class="vt-tag latest">Latest</span>
+    <span class="vt-tag stable">Stable</span>
     <div class="vt-label" style="font-size:12px;color:var(--text-3);margin-top:2px;">Phase 5 — Advanced Harness</div>
     <ul class="vt-changes">
       <li>🤖 <strong>Sub-Agent 子代理编排</strong> — 复杂任务自动拆分，多代理并行处理</li>
