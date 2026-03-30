@@ -3260,17 +3260,55 @@ function showEngineForm(existing) {
 let engFormType = '';
 let engFormEditId = null;
 
-function selectEngineType(category) {
+async function selectEngineType(category) {
   engFormType = category;
   document.querySelectorAll('.eng-type-card').forEach(c => c.classList.remove('selected'));
   event.currentTarget.classList.add('selected');
 
-  const presets = ENGINE_PRESETS[category] || [];
-  $('engPresets').innerHTML = presets.length ? `<div class="eng-presets">${presets.map((p, i) =>
-    `<span class="eng-preset-chip" onclick="applyPreset('${category}', ${i})">${p.icon} ${esc(p.label)}</span>`
-  ).join('')}</div>` : '';
+  if (category === 'agentic') {
+    // Fetch registered agentic engine types from plugins
+    $('engPresets').innerHTML = '';
+    try {
+      const data = await api('GET', '/api/engine-types');
+      const agenticTypes = (data.types || []).filter(t => t.category === 'agentic');
+      if (agenticTypes.length === 0) {
+        $('engFields').innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:12px 0">No Agentic engine plugins installed.<br>Install a plugin in <code>plugins/engine-{name}/</code> and restart.</div>';
+        return;
+      }
+      // Show SDK selector
+      $('engFields').innerHTML = `
+        <div class="eng-field"><label>Select SDK</label>
+          <div class="eng-presets" style="margin-top:4px">
+            ${agenticTypes.map(t => `<span class="eng-preset-chip" onclick="selectAgenticSDK('${esc(t.type)}')" style="padding:8px 16px">${esc(t.name)}</span>`).join('')}
+          </div>
+        </div>
+        <div id="engSdkFields"></div>
+      `;
+    } catch (err) {
+      $('engFields').innerHTML = `<div style="color:#f87171;font-size:13px">Failed to load engine types: ${esc(err.message)}</div>`;
+    }
+  } else {
+    // API engine — show presets + fields directly
+    const presets = ENGINE_PRESETS[category] || [];
+    $('engPresets').innerHTML = presets.length ? `<div class="eng-presets">${presets.map((p, i) =>
+      `<span class="eng-preset-chip" onclick="applyPreset('${category}', ${i})">${p.icon} ${esc(p.label)}</span>`
+    ).join('')}</div>` : '';
+    $('engFields').innerHTML = buildEngineFields({ type: 'openai', category: 'api' });
+  }
+}
 
-  $('engFields').innerHTML = buildEngineFields({ type: category === 'api' ? 'openai' : 'claude-sdk', category });
+function selectAgenticSDK(sdkType) {
+  // Highlight selected SDK chip
+  document.querySelectorAll('#engFields .eng-preset-chip').forEach(c => {
+    c.style.borderColor = '';
+    c.style.color = '';
+  });
+  event.currentTarget.style.borderColor = 'var(--accent)';
+  event.currentTarget.style.color = 'var(--accent)';
+
+  // Show config fields for this SDK type
+  const sdkFields = $('engSdkFields');
+  sdkFields.innerHTML = buildEngineFields({ type: sdkType, category: 'agentic' });
 }
 
 function applyPreset(category, idx) {

@@ -123,6 +123,19 @@ OpenDaemon 当前的引擎接入存在以下问题：
 │  │ 自带Agent能力 │  │ OpenDaemon提供能力│         │
 │  └──────────────┘  └──────────────────┘         │
 │                                                 │
+│  ── 选择 Agentic 后 ──                          │
+│                                                 │
+│  选择 SDK:                                      │
+│  [Claude Agent SDK] [OpenAI Agents] [Google ADK]│
+│  (从已安装插件动态获取，未安装的灰显)            │
+│                                                 │
+│  认证方式:                                      │
+│  ○ OAuth (已登录，零配置)                       │
+│  ○ API Key                                      │
+│  ○ 自定义接口 (URL + Key)                       │
+│                                                 │
+│  ── 选择 API 后 ──                              │
+│                                                 │
 │  快速添加:                                      │
 │  [GPT-4o] [Gemini] [DeepSeek] [Kimi] [Ollama]  │
 │                                                 │
@@ -165,6 +178,7 @@ OpenDaemon 当前的引擎接入存在以下问题：
 |------|------|------|
 | GET | /api/engines | 列表（已有，增加 category 字段） |
 | GET | /api/engines/:id | 单个详情（脱敏） |
+| GET | /api/engine-types | 已注册的引擎类型（从插件 + 内置动态获取） |
 | POST | /api/engines | 添加 |
 | PUT | /api/engines/:id | 编辑 |
 | DELETE | /api/engines/:id | 删除 |

@@ -11,7 +11,7 @@ import { createAuth } from "./lib/auth.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
 import { BUILTIN_TOOL_DEFINITIONS, BUILTIN_TOOL_NAMES, executeBuiltinTool } from "./lib/builtin-tools.mjs";
 import { MCPManager } from "./lib/mcp-manager.mjs";
-import { registerEngine, getEngineHandler } from "./lib/engine-registry.mjs";
+import { registerEngine, getEngineHandler, getRegisteredEngines } from "./lib/engine-registry.mjs";
 import { loadPlugins } from "./lib/plugin-loader.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
 import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST } from "./lib/attachments.mjs";
@@ -191,9 +191,30 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── Engine routes ──
+  // ── Init (combined endpoint to reduce round-trips) ──
+
+  if (method === "GET" && path === "/api/init") {
+    const convs = listConversations();
+    const latestConvId = convs[0]?.id;
+    const latestMessages = latestConvId ? getMessages(latestConvId) : [];
+    json(res, {
+      engines: getEngines(),
+      conversations: convs,
+      latestMessages,
+      server_boot: SERVER_BOOT,
+    });
+    return;
+  }
+
 
   if (method === "GET" && path === "/api/engines") {
     json(res, { engines: getEngines(), server_boot: SERVER_BOOT });
+    return;
+  }
+
+  // GET /api/engine-types — registered engine types (from plugins + built-in)
+  if (method === "GET" && path === "/api/engine-types") {
+    json(res, { types: getRegisteredEngines() });
     return;
   }
 
