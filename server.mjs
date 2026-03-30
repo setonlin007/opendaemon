@@ -1033,10 +1033,11 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal, inje
     return { role: m.role, content: m.content };
   });
 
-  // Inject learned context as system message
-  if (injectedContext) {
-    messages.unshift({ role: "system", content: injectedContext });
-  }
+  // Build base system prompt + inject learned context
+  const systemParts = [];
+  systemParts.push(`You are the user's personal Daemon — an AI assistant with tool-calling capabilities. When the user asks you to perform actions (search the web, send messages, create reminders, generate files, etc.), you MUST use the available tools to fulfill the request. Do not claim you cannot do something if a relevant tool is available. Always prefer taking action over explaining limitations.`);
+  if (injectedContext) systemParts.push(injectedContext);
+  messages.unshift({ role: "system", content: systemParts.join("\n\n") });
 
   // Build tools from MCP Manager (long-running process)
   const { tools, onToolCall } = await buildMCPTools();
