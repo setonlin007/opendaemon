@@ -442,14 +442,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .eng-field input:focus, .eng-field select:focus { outline: none; border-color: var(--accent); }
 .eng-field-row { display: flex; gap: 8px; }
 .eng-field-row .eng-field { flex: 1; }
-.eng-form-actions { display: flex; gap: 8px; margin-top: 16px; }
-.eng-form-actions button { padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); transition: all 0.15s; }
+.eng-form-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; align-items: center; }
+.eng-form-actions button { padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); transition: all 0.15s; flex-shrink: 0; }
 .eng-form-actions .eng-btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .eng-form-actions .eng-btn-primary:hover { opacity: 0.9; }
 .eng-form-actions .eng-btn-secondary { background: none; color: var(--text-2); }
 .eng-form-actions .eng-btn-secondary:hover { background: var(--hover); }
 .eng-form-actions .eng-btn-test { background: none; color: var(--text-2); }
-.eng-test-status { font-size: 12px; margin-left: 8px; }
+.eng-test-status { font-size: 11px; flex-basis: 100%; order: 10; }
 .eng-test-status.ok { color: #4ade80; }
 .eng-test-status.fail { color: #f87171; }
 .eng-test-status.loading { color: var(--text-3); }
@@ -3237,10 +3237,9 @@ function showEngineForm(existing) {
 
       <div class="eng-form-actions">
         <button class="eng-btn-secondary" onclick="renderEnginesList()">Cancel</button>
-        ${isEdit || type ? `<button class="eng-btn-secondary eng-btn-test" onclick="testEngineForm()">Test Connection</button>` : ''}
-        <span class="eng-test-status" id="engTestStatus"></span>
-        <div style="flex:1"></div>
+        ${isEdit || type ? `<button class="eng-btn-secondary eng-btn-test" onclick="testEngineForm()">Test</button>` : ''}
         <button class="eng-btn-primary" onclick="saveEngineForm(${isEdit ? 'true' : 'false'})">${isEdit ? 'Save' : 'Add'}</button>
+        <span class="eng-test-status" id="engTestStatus"></span>
       </div>
     </div>
   `;
