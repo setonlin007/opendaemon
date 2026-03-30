@@ -14,7 +14,7 @@ import { MCPManager } from "./lib/mcp-manager.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
 import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST } from "./lib/attachments.mjs";
 import { parseMultipart } from "./lib/multipart.mjs";
-import { initKnowledge, listKnowledge, getKnowledgeContent, updateKnowledge, deleteKnowledge, syncWorkspaceKnowledge } from "./lib/knowledge.mjs";
+import { initKnowledge, listKnowledge, getKnowledgeContent, updateKnowledge, deleteKnowledge, syncWorkspaceKnowledge, rebuildFtsIndex } from "./lib/knowledge.mjs";
 import { buildInjectedContext } from "./lib/injector.mjs";
 import { loadGoals, saveGoals, prepareReflection, processReflectionResult, getPendingInsights, acceptPendingInsight, rejectPendingInsight, getReflectionHistory } from "./lib/reflect.mjs";
 import { initEvolution, onChatComplete, onFeedback, getEvolutionState, getEvolutionLog, getEvolutionStats } from "./lib/evolution.mjs";
@@ -56,6 +56,7 @@ initDb();
 initUploads();
 initKnowledge();
 syncWorkspaceKnowledge();
+rebuildFtsIndex();  // P1: rebuild FTS5 index on startup
 initEvolution(config.evolution || {});
 const auth = createAuth(config.auth.password);
 

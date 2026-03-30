@@ -8,6 +8,7 @@ from .notify import NOTIFY_TOOL, handle_notify
 from .reminder import REMINDER_TOOL, handle_reminder
 from .cron_task import CRON_TASK_TOOL, handle_cron_task
 from .tech_buzz import TECH_BUZZ_TOOL, handle_tech_buzz
+from .knowledge_detail import KNOWLEDGE_DETAIL_TOOL, handle_knowledge_detail
 
 ALL_TOOLS: list[Tool] = [
     WEB_SEARCH_TOOL,
@@ -16,6 +17,7 @@ ALL_TOOLS: list[Tool] = [
     REMINDER_TOOL,
     CRON_TASK_TOOL,
     TECH_BUZZ_TOOL,
+    KNOWLEDGE_DETAIL_TOOL,
 ]
 
 TOOL_HANDLERS = {
@@ -25,4 +27,5 @@ TOOL_HANDLERS = {
     "set_reminder": handle_reminder,
     "cron_task": handle_cron_task,
     "tech_buzz": handle_tech_buzz,
+    "knowledge_detail": handle_knowledge_detail,
 }
