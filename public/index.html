@@ -401,6 +401,69 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .k-entry-actions button:hover { color: var(--accent); }
 .eval-details.expanded { display: block !important; }
 
+/* ── Engine Management Panel ── */
+.eng-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; backdrop-filter: blur(2px); }
+.eng-overlay.open { display: flex; align-items: center; justify-content: center; }
+.eng-panel { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 12px; width: 90vw; max-width: 640px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+.eng-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.eng-header h2 { font-size: 16px; font-weight: 700; }
+.eng-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.eng-group { margin-bottom: 18px; }
+.eng-group-title { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.eng-card { background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+.eng-card-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+.eng-card-info { flex: 1; min-width: 0; }
+.eng-card-label { font-size: 13px; font-weight: 600; }
+.eng-card-meta { font-size: 11px; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eng-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.eng-card-actions button { background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--text-3); cursor: pointer; font-size: 11px; padding: 4px 8px; transition: all 0.15s; }
+.eng-card-actions button:hover { background: var(--hover); color: var(--text); }
+.eng-card-actions .eng-test-ok { color: #4ade80; border-color: #4ade80; }
+.eng-card-actions .eng-test-fail { color: #f87171; border-color: #f87171; }
+.eng-add-btn { width: 100%; padding: 10px; background: none; border: 2px dashed var(--border); border-radius: 8px; color: var(--text-3); cursor: pointer; font-size: 13px; transition: all 0.15s; margin-top: 12px; }
+.eng-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Engine form */
+.eng-form { padding: 16px 20px; }
+.eng-form-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+.eng-type-selector { display: flex; gap: 8px; margin-bottom: 14px; }
+.eng-type-card { flex: 1; padding: 12px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.15s; }
+.eng-type-card:hover { border-color: var(--text-3); }
+.eng-type-card.selected { border-color: var(--accent); background: rgba(99,102,241,0.1); }
+.eng-type-card .eng-type-icon { font-size: 20px; margin-bottom: 4px; }
+.eng-type-card .eng-type-name { font-size: 13px; font-weight: 600; }
+.eng-type-card .eng-type-desc { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+.eng-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.eng-preset-chip { padding: 5px 12px; border: 1px solid var(--border); border-radius: 16px; font-size: 12px; cursor: pointer; color: var(--text-2); transition: all 0.15s; }
+.eng-preset-chip:hover { border-color: var(--accent); color: var(--accent); }
+.eng-field { margin-bottom: 10px; }
+.eng-field label { display: block; font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+.eng-field input, .eng-field select { width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; box-sizing: border-box; }
+.eng-field input:focus, .eng-field select:focus { outline: none; border-color: var(--accent); }
+.eng-field-row { display: flex; gap: 8px; }
+.eng-field-row .eng-field { flex: 1; }
+.eng-form-actions { display: flex; gap: 8px; margin-top: 16px; }
+.eng-form-actions button { padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); transition: all 0.15s; }
+.eng-form-actions .eng-btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.eng-form-actions .eng-btn-primary:hover { opacity: 0.9; }
+.eng-form-actions .eng-btn-secondary { background: none; color: var(--text-2); }
+.eng-form-actions .eng-btn-secondary:hover { background: var(--hover); }
+.eng-form-actions .eng-btn-test { background: none; color: var(--text-2); }
+.eng-test-status { font-size: 12px; margin-left: 8px; }
+.eng-test-status.ok { color: #4ade80; }
+.eng-test-status.fail { color: #f87171; }
+.eng-test-status.loading { color: var(--text-3); }
+
+/* Chat header engine switcher */
+.chat-engine-switcher { position: relative; cursor: pointer; }
+.chat-engine-switcher:hover .engine-label { color: var(--accent); }
+.chat-engine-dropdown { display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 100; min-width: 200px; }
+.chat-engine-dropdown.open { display: block; }
+.chat-engine-dropdown-item { padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.chat-engine-dropdown-item:hover { background: var(--hover); color: var(--text); }
+.chat-engine-dropdown-item.active { color: var(--accent); }
+.chat-engine-dropdown-cat { font-size: 10px; color: var(--text-3); padding: 4px 10px 2px; }
+
 /* Goals editor */
 .goals-editor { width: 100%; min-height: 200px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: monospace; font-size: 13px; padding: 12px; resize: vertical; }
 
@@ -497,6 +560,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   </div>
   <div class="conv-list" id="convList"></div>
   <div class="sidebar-footer">
+    <button class="footer-btn" onclick="openEnginesPanel()">
+      <span class="footer-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </span>
+      <span class="footer-label">Engines</span>
+    </button>
     <button class="footer-btn" onclick="openArtifactsPanel()">
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -544,7 +613,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   <div class="chat-header">
     <div style="display:flex;align-items:center;gap:8px;">
       <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()">&#9776;<span class="menu-dot"></span></button>
-      <span class="engine-label" id="engineLabel">Select an engine</span>
+      <div class="chat-engine-switcher" id="chatEngineSwitcher" onclick="toggleChatEngineSwitcher(event)">
+        <span class="engine-label" id="engineLabel">Select an engine</span>
+        <div class="chat-engine-dropdown" id="chatEngineDropdown"></div>
+      </div>
       <span class="session-info" id="sessionInfo"></span>
     </div>
     <span class="status" id="statusBadge">Ready</span>
@@ -618,6 +690,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
       <button class="evo-close" onclick="closeArtifactsPanel()">&times;</button>
     </div>
     <div class="artifacts-tree" id="artifactsTree"></div>
+  </div>
+</div>
+
+<!-- Engine Management Overlay -->
+<div class="eng-overlay" id="engOverlay" onclick="if(event.target===this)closeEnginesPanel()">
+  <div class="eng-panel">
+    <div class="eng-header">
+      <h2>⚙️ Engines</h2>
+      <button class="evo-close" onclick="closeEnginesPanel()">&times;</button>
+    </div>
+    <div class="eng-body" id="engBody">
+      <!-- Rendered by JS -->
+    </div>
   </div>
 </div>
 
@@ -3015,6 +3100,371 @@ async function loadToolsBadge() {
     const badge = $('toolsBadge');
     if (badge) badge.textContent = proposed > 0 ? `(${proposed})` : '';
   } catch {}
+}
+
+// ── Engine Management Panel ──
+
+const ENGINE_PRESETS = {
+  api: [
+    { label: 'GPT-4o', icon: 'G', provider: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' } },
+    { label: 'Gemini 2.5 Pro', icon: 'G', provider: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-pro' } },
+    { label: 'DeepSeek V3', icon: 'D', provider: { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' } },
+    { label: 'Kimi K2', icon: 'K', provider: { baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2' } },
+    { label: 'Ollama (Local)', icon: 'O', provider: { baseUrl: 'http://localhost:11434/v1', model: 'llama3' } },
+  ],
+  agentic: [
+    { label: 'Claude Opus', icon: 'C', model: 'claude-opus-4-6' },
+    { label: 'Claude Sonnet', icon: 'C', model: 'claude-sonnet-4-5-20250929' },
+  ]
+};
+
+function openEnginesPanel() {
+  $('engOverlay').classList.add('open');
+  renderEnginesList();
+}
+function closeEnginesPanel() {
+  $('engOverlay').classList.remove('open');
+}
+
+async function renderEnginesList() {
+  const body = $('engBody');
+  try {
+    const data = await api('GET', '/api/engines');
+    const engineList = data.engines || [];
+    const agentic = engineList.filter(e => e.category === 'agentic');
+    const apiEngines = engineList.filter(e => e.category === 'api');
+
+    body.innerHTML = `
+      ${agentic.length ? `<div class="eng-group">
+        <div class="eng-group-title">🤖 Agentic Engines</div>
+        ${agentic.map(e => renderEngineCard(e)).join('')}
+      </div>` : ''}
+      ${apiEngines.length ? `<div class="eng-group">
+        <div class="eng-group-title">🔌 API Engines</div>
+        ${apiEngines.map(e => renderEngineCard(e)).join('')}
+      </div>` : ''}
+      <button class="eng-add-btn" onclick="showEngineForm()">+ Add Engine</button>
+    `;
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px">Failed to load engines: ${esc(err.message)}</div>`;
+  }
+}
+
+function renderEngineCard(e) {
+  return `<div class="eng-card" id="eng-card-${e.id}">
+    <div class="eng-card-icon">${esc(e.icon || e.label[0])}</div>
+    <div class="eng-card-info">
+      <div class="eng-card-label">${esc(e.label)}</div>
+      <div class="eng-card-meta">${e.category === 'agentic' ? 'Agentic' : 'API'} · ${esc(e.id)}</div>
+    </div>
+    <div class="eng-card-actions">
+      <button onclick="testEngine('${e.id}', this)" title="Test">Test</button>
+      <button onclick="editEngine('${e.id}')" title="Edit">Edit</button>
+      <button onclick="deleteEngine('${e.id}')" title="Delete">✕</button>
+    </div>
+  </div>`;
+}
+
+async function testEngine(id, btn) {
+  if (!btn) return;
+  const orig = btn.textContent;
+  btn.textContent = '...';
+  btn.className = '';
+  try {
+    const result = await api('POST', `/api/engines/${id}/test`);
+    if (result.ok) {
+      btn.textContent = `✓ ${result.latency_ms}ms`;
+      btn.className = 'eng-test-ok';
+    } else {
+      btn.textContent = '✕ Failed';
+      btn.className = 'eng-test-fail';
+      btn.title = result.error || 'Test failed';
+    }
+  } catch (err) {
+    btn.textContent = '✕ Error';
+    btn.className = 'eng-test-fail';
+    btn.title = err.message;
+  }
+  setTimeout(() => { btn.textContent = orig; btn.className = ''; btn.title = 'Test'; }, 5000);
+}
+
+async function deleteEngine(id) {
+  if (!confirm(`Delete engine "${id}"?`)) return;
+  try {
+    const result = await api('DELETE', `/api/engines/${id}`);
+    engines = result.engines || engines;
+    renderEnginesList();
+    renderEnginePicker();
+  } catch (err) {
+    alert('Delete failed: ' + err.message);
+  }
+}
+
+async function editEngine(id) {
+  try {
+    const config = await api('GET', `/api/engines/${id}`);
+    showEngineForm(config);
+  } catch (err) {
+    alert('Failed to load engine config: ' + err.message);
+  }
+}
+
+function showEngineForm(existing) {
+  const body = $('engBody');
+  const isEdit = !!existing;
+  const type = existing?.type || '';
+  const category = existing?.category || '';
+
+  body.innerHTML = `
+    <div class="eng-form">
+      <div class="eng-form-title">${isEdit ? 'Edit Engine' : 'Add Engine'}</div>
+
+      ${!isEdit ? `<div class="eng-type-selector">
+        <div class="eng-type-card${category === 'agentic' ? ' selected' : ''}" onclick="selectEngineType('agentic')">
+          <div class="eng-type-icon">🤖</div>
+          <div class="eng-type-name">Agentic</div>
+          <div class="eng-type-desc">Built-in Agent capabilities</div>
+        </div>
+        <div class="eng-type-card${category === 'api' ? ' selected' : ''}" onclick="selectEngineType('api')">
+          <div class="eng-type-icon">🔌</div>
+          <div class="eng-type-name">API</div>
+          <div class="eng-type-desc">OpenDaemon provides Agent capabilities</div>
+        </div>
+      </div>
+      <div id="engPresets"></div>` : ''}
+
+      <div id="engFields">${isEdit ? buildEngineFields(existing) : ''}</div>
+
+      <div class="eng-form-actions">
+        <button class="eng-btn-secondary" onclick="renderEnginesList()">Cancel</button>
+        ${isEdit || type ? `<button class="eng-btn-secondary eng-btn-test" onclick="testEngineForm()">Test Connection</button>` : ''}
+        <span class="eng-test-status" id="engTestStatus"></span>
+        <div style="flex:1"></div>
+        <button class="eng-btn-primary" onclick="saveEngineForm(${isEdit ? 'true' : 'false'})">${isEdit ? 'Save' : 'Add'}</button>
+      </div>
+    </div>
+  `;
+}
+
+let engFormType = '';
+let engFormEditId = null;
+
+function selectEngineType(category) {
+  engFormType = category;
+  document.querySelectorAll('.eng-type-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+
+  const presets = ENGINE_PRESETS[category] || [];
+  $('engPresets').innerHTML = presets.length ? `<div class="eng-presets">${presets.map((p, i) =>
+    `<span class="eng-preset-chip" onclick="applyPreset('${category}', ${i})">${p.icon} ${esc(p.label)}</span>`
+  ).join('')}</div>` : '';
+
+  $('engFields').innerHTML = buildEngineFields({ type: category === 'api' ? 'openai' : 'claude-sdk', category });
+}
+
+function applyPreset(category, idx) {
+  const preset = ENGINE_PRESETS[category]?.[idx];
+  if (!preset) return;
+  const fake = {
+    type: category === 'api' ? 'openai' : 'claude-sdk',
+    category,
+    label: preset.label,
+    icon: preset.icon,
+    model: preset.model || '',
+    provider: preset.provider || {},
+  };
+  $('engFields').innerHTML = buildEngineFields(fake);
+  engFormEditId = null;
+}
+
+function buildEngineFields(e) {
+  engFormEditId = e.id || null;
+  const isApi = e.type === 'openai' || e.category === 'api';
+
+  if (isApi) {
+    return `
+      <div class="eng-field-row">
+        <div class="eng-field"><label>Name</label><input id="engLabel" value="${esc(e.label || '')}"></div>
+        <div class="eng-field" style="max-width:60px"><label>Icon</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
+      </div>
+      <div class="eng-field"><label>Base URL</label><input id="engBaseUrl" value="${esc(e.provider?.baseUrl || '')}" placeholder="https://api.openai.com/v1"></div>
+      <div class="eng-field"><label>API Key</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-..."></div>
+      <div class="eng-field"><label>Model</label><input id="engModel" value="${esc(e.provider?.model || '')}" placeholder="gpt-4o"></div>
+      <input type="hidden" id="engType" value="openai">
+    `;
+  } else {
+    return `
+      <div class="eng-field-row">
+        <div class="eng-field"><label>Name</label><input id="engLabel" value="${esc(e.label || '')}"></div>
+        <div class="eng-field" style="max-width:60px"><label>Icon</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
+      </div>
+      <div class="eng-field"><label>Model</label>
+        <select id="engModel">
+          <option value="">Default</option>
+          <option value="claude-opus-4-6"${e.model === 'claude-opus-4-6' ? ' selected' : ''}>Claude Opus 4</option>
+          <option value="claude-sonnet-4-5-20250929"${e.model === 'claude-sonnet-4-5-20250929' ? ' selected' : ''}>Claude Sonnet 4.5</option>
+          <option value="claude-haiku-3-5-20241022"${e.model === 'claude-haiku-3-5-20241022' ? ' selected' : ''}>Claude Haiku 3.5</option>
+        </select>
+      </div>
+      <div class="eng-field"><label>API Key (optional, uses env if empty)</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-ant-..."></div>
+      <div class="eng-field-row">
+        <div class="eng-field"><label>Platform</label>
+          <select id="engPlatform">
+            <option value="anthropic"${(e.provider?.platform || 'anthropic') === 'anthropic' ? ' selected' : ''}>Anthropic</option>
+            <option value="bedrock"${e.provider?.platform === 'bedrock' ? ' selected' : ''}>AWS Bedrock</option>
+            <option value="vertex"${e.provider?.platform === 'vertex' ? ' selected' : ''}>Google Vertex</option>
+            <option value="foundry"${e.provider?.platform === 'foundry' ? ' selected' : ''}>Azure Foundry</option>
+          </select>
+        </div>
+        <div class="eng-field"><label>Effort</label>
+          <select id="engEffort">
+            <option value=""${!e.options?.effort ? ' selected' : ''}>Default (high)</option>
+            <option value="low"${e.options?.effort === 'low' ? ' selected' : ''}>Low</option>
+            <option value="medium"${e.options?.effort === 'medium' ? ' selected' : ''}>Medium</option>
+            <option value="high"${e.options?.effort === 'high' ? ' selected' : ''}>High</option>
+            <option value="max"${e.options?.effort === 'max' ? ' selected' : ''}>Max</option>
+          </select>
+        </div>
+      </div>
+      <div class="eng-field"><label>Budget Limit (USD per conversation, optional)</label><input id="engBudget" type="number" step="0.5" value="${e.options?.maxBudgetUsd || ''}" placeholder="e.g. 5"></div>
+      <input type="hidden" id="engType" value="claude-sdk">
+    `;
+  }
+}
+
+async function saveEngineForm(isEdit) {
+  const type = $('engType')?.value;
+  const label = $('engLabel')?.value?.trim();
+  const icon = $('engIcon')?.value?.trim();
+  const model = $('engModel')?.value?.trim();
+  const apiKey = $('engApiKey')?.value?.trim();
+
+  if (!label) { alert('Name is required'); return; }
+  if (!type) { alert('Please select engine type'); return; }
+
+  const payload = { label, icon: icon || label[0] };
+
+  if (type === 'openai') {
+    const baseUrl = $('engBaseUrl')?.value?.trim();
+    if (!baseUrl) { alert('Base URL is required'); return; }
+    payload.type = 'openai';
+    payload.provider = { baseUrl, model: model || '' };
+    if (apiKey && !apiKey.includes('***')) payload.provider.apiKey = apiKey;
+    else if (apiKey) payload.provider.apiKey = apiKey; // masked value, server will keep original
+  } else {
+    payload.type = 'claude-sdk';
+    if (model) payload.model = model;
+    const platform = $('engPlatform')?.value;
+    const effort = $('engEffort')?.value;
+    const budget = $('engBudget')?.value;
+    payload.provider = {};
+    if (apiKey && !apiKey.includes('***')) payload.provider.apiKey = apiKey;
+    else if (apiKey) payload.provider.apiKey = apiKey;
+    if (platform && platform !== 'anthropic') payload.provider.platform = platform;
+    const opts = {};
+    if (effort) opts.effort = effort;
+    if (budget) opts.maxBudgetUsd = parseFloat(budget);
+    if (Object.keys(opts).length) payload.options = opts;
+  }
+
+  try {
+    let result;
+    if (isEdit && engFormEditId) {
+      result = await api('PUT', `/api/engines/${engFormEditId}`, payload);
+    } else {
+      payload.id = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      if (!payload.id) payload.id = 'engine-' + Date.now();
+      result = await api('POST', '/api/engines', payload);
+    }
+    engines = result.engines || engines;
+    renderEnginesList();
+    renderEnginePicker();
+  } catch (err) {
+    alert('Save failed: ' + err.message);
+  }
+}
+
+async function testEngineForm() {
+  const status = $('engTestStatus');
+  if (!engFormEditId) {
+    status.textContent = 'Save first to test';
+    status.className = 'eng-test-status fail';
+    return;
+  }
+  status.textContent = 'Testing...';
+  status.className = 'eng-test-status loading';
+  try {
+    const result = await api('POST', `/api/engines/${engFormEditId}/test`);
+    if (result.ok) {
+      status.textContent = `✓ Connected (${result.latency_ms}ms)`;
+      status.className = 'eng-test-status ok';
+    } else {
+      status.textContent = `✕ ${result.error?.substring(0, 60) || 'Failed'}`;
+      status.className = 'eng-test-status fail';
+    }
+  } catch (err) {
+    status.textContent = `✕ ${err.message}`;
+    status.className = 'eng-test-status fail';
+  }
+}
+
+// ── Chat Header Engine Switcher ──
+
+function toggleChatEngineSwitcher(e) {
+  e.stopPropagation();
+  if (!currentConv) return;
+  const dropdown = $('chatEngineDropdown');
+  if (dropdown.classList.contains('open')) {
+    dropdown.classList.remove('open');
+    return;
+  }
+  const agenticEngines = engines.filter(eng => eng.category === 'agentic');
+  const apiEngines = engines.filter(eng => eng.category === 'api');
+  let html = '';
+  if (agenticEngines.length) {
+    html += '<div class="chat-engine-dropdown-cat">🤖 Agentic</div>';
+    html += agenticEngines.map(eng => `<div class="chat-engine-dropdown-item${eng.id === currentConv.engine_id ? ' active' : ''}" onclick="switchConvEngine('${eng.id}', event)">${eng.icon || ''} ${esc(eng.label)}</div>`).join('');
+  }
+  if (apiEngines.length) {
+    html += '<div class="chat-engine-dropdown-cat">🔌 API</div>';
+    html += apiEngines.map(eng => `<div class="chat-engine-dropdown-item${eng.id === currentConv.engine_id ? ' active' : ''}" onclick="switchConvEngine('${eng.id}', event)">${eng.icon || ''} ${esc(eng.label)}</div>`).join('');
+  }
+  dropdown.innerHTML = html;
+  dropdown.classList.add('open');
+}
+
+async function switchConvEngine(engineId, e) {
+  e.stopPropagation();
+  $('chatEngineDropdown').classList.remove('open');
+  if (!currentConv || currentConv.engine_id === engineId) return;
+  try {
+    await api('PATCH', `/api/conversations/${currentConv.id}`, { engine_id: engineId });
+    currentConv.engine_id = engineId;
+    const eng = engines.find(en => en.id === engineId);
+    $('engineLabel').textContent = eng?.label || engineId;
+    renderConversations();
+  } catch (err) {
+    alert('Switch failed: ' + err.message);
+  }
+}
+
+// Close chat engine dropdown on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.chat-engine-switcher')) {
+    $('chatEngineDropdown')?.classList.remove('open');
+  }
+});
+
+function renderEnginePicker() {
+  // Update the sidebar engine picker options
+  const picker = $('enginePicker');
+  if (picker) {
+    picker.innerHTML = engines.map(e => {
+      const sel = e.id === engineSelect?.value ? ' selected' : '';
+      const cat = e.category === 'agentic' ? '🤖' : '🔌';
+      return `<div class="engine-picker-item${sel}" onclick="pickEngine('${e.id}')">${cat} ${e.icon ? e.icon + ' ' : ''}${esc(e.label)}</div>`;
+    }).join('');
+  }
 }
 
 // ── Start ──

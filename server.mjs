@@ -5,11 +5,12 @@ import { dirname, join } from "path";
 import { readFileSync, existsSync, statSync, readdirSync } from "fs";
 import { homedir } from "os";
 
-import { loadConfig, getEngineById, getEngines } from "./lib/config.mjs";
+import { loadConfig, getEngineById, getEngines, getEngineFullConfig, saveEngines, mergeEngineUpdate } from "./lib/config.mjs";
 import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
 import { createAuth } from "./lib/auth.mjs";
 import { streamClaude, fetchCommands } from "./lib/engine-claude.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
+import { BUILTIN_TOOL_DEFINITIONS, BUILTIN_TOOL_NAMES, executeBuiltinTool } from "./lib/builtin-tools.mjs";
 import { MCPManager } from "./lib/mcp-manager.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
 import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST } from "./lib/attachments.mjs";
@@ -146,6 +147,138 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // GET /api/engines/:id — single engine detail (masked)
+  if (method === "GET" && path.match(/^\/api\/engines\/[^/]+$/) && !path.endsWith("/test")) {
+    const engineId = decodeURIComponent(path.split("/api/engines/")[1]);
+    const engineConfig = getEngineFullConfig(engineId);
+    if (!engineConfig) { json(res, { error: "Engine not found" }, 404); return; }
+    json(res, engineConfig);
+    return;
+  }
+
+  // POST /api/engines — add new engine
+  if (method === "POST" && path === "/api/engines") {
+    try {
+      const body = await readBody(req);
+      if (!body?.id || !body?.type || !body?.label) {
+        json(res, { error: "id, type, and label are required" }, 400); return;
+      }
+      const current = loadConfig().engines;
+      if (current.find((e) => e.id === body.id)) {
+        json(res, { error: `Engine "${body.id}" already exists` }, 409); return;
+      }
+      const newEngine = { id: body.id, type: body.type, label: body.label };
+      if (body.icon) newEngine.icon = body.icon;
+      if (body.model) newEngine.model = body.model;
+      if (body.provider) newEngine.provider = body.provider;
+      if (body.options) newEngine.options = body.options;
+      saveEngines([...current, newEngine]);
+      json(res, { ok: true, engines: getEngines() });
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+    return;
+  }
+
+  // PUT /api/engines/:id — update engine
+  if (method === "PUT" && path.match(/^\/api\/engines\/[^/]+$/) && !path.endsWith("/test")) {
+    try {
+      const engineId = decodeURIComponent(path.split("/api/engines/")[1]);
+      const current = loadConfig().engines;
+      const existing = current.find((e) => e.id === engineId);
+      if (!existing) { json(res, { error: "Engine not found" }, 404); return; }
+      const body = await readBody(req);
+      const merged = mergeEngineUpdate(existing, body);
+      const updated = current.map((e) => e.id === engineId ? merged : e);
+      saveEngines(updated);
+      json(res, { ok: true, engines: getEngines() });
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+    return;
+  }
+
+  // DELETE /api/engines/:id — delete engine
+  if (method === "DELETE" && path.match(/^\/api\/engines\/[^/]+$/)) {
+    try {
+      const engineId = decodeURIComponent(path.split("/api/engines/")[1]);
+      const current = loadConfig().engines;
+      if (!current.find((e) => e.id === engineId)) {
+        json(res, { error: "Engine not found" }, 404); return;
+      }
+      const filtered = current.filter((e) => e.id !== engineId);
+      if (filtered.length === 0) {
+        json(res, { error: "Cannot delete the last engine" }, 400); return;
+      }
+      saveEngines(filtered);
+      json(res, { ok: true, engines: getEngines() });
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+    return;
+  }
+
+  // POST /api/engines/:id/test — connection test
+  if (method === "POST" && path.match(/^\/api\/engines\/[^/]+\/test$/)) {
+    const engineId = decodeURIComponent(path.split("/api/engines/")[1].replace("/test", ""));
+    const engine = getEngineById(engineId);
+    if (!engine) { json(res, { error: "Engine not found" }, 404); return; }
+
+    const start = Date.now();
+    try {
+      if (engine.type === "openai") {
+        const { baseUrl, apiKey, model } = engine.provider;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ model, messages: [{ role: "user", content: "Say hi" }], max_tokens: 10 }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => "unknown");
+          json(res, { ok: false, error: `HTTP ${resp.status}: ${errText.substring(0, 200)}`, latency_ms: Date.now() - start });
+          return;
+        }
+        json(res, { ok: true, latency_ms: Date.now() - start });
+      } else if (engine.type === "claude-sdk") {
+        // For Claude SDK, verify API key is available
+        const apiKey = engine.provider?.apiKey || process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+          json(res, { ok: false, error: "No API key configured (set provider.apiKey or ANTHROPIC_API_KEY env)" });
+          return;
+        }
+        // Make a lightweight Anthropic API call to verify the key
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({ model: engine.model || "claude-sonnet-4-20250514", max_tokens: 10, messages: [{ role: "user", content: "Hi" }] }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => "unknown");
+          json(res, { ok: false, error: `HTTP ${resp.status}: ${errText.substring(0, 200)}`, latency_ms: Date.now() - start });
+          return;
+        }
+        json(res, { ok: true, latency_ms: Date.now() - start });
+      } else {
+        json(res, { ok: false, error: `Unknown engine type: ${engine.type}` });
+      }
+    } catch (err) {
+      json(res, { ok: false, error: err.name === "AbortError" ? "Connection timeout (15s)" : err.message, latency_ms: Date.now() - start });
+    }
+    return;
+  }
+
   if (method === "GET" && path === "/api/commands") {
     try {
       const data = await fetchCommands();
@@ -179,6 +312,11 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       if (body.title) {
         db.prepare("UPDATE conversations SET title = ? WHERE id = ?").run(body.title, id);
+      }
+      if (body.engine_id) {
+        const engine = getEngineById(body.engine_id);
+        if (!engine) { json(res, { error: "unknown engine" }, 400); return; }
+        db.prepare("UPDATE conversations SET engine_id = ? WHERE id = ?").run(body.engine_id, id);
       }
       json(res, { ok: true });
     } catch (err) { json(res, { error: err.message }, 500); }
@@ -1003,6 +1141,7 @@ async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal, inje
       convId: conv.id,
       sdkSessionId: conv.sdk_session,
       mcpServers,
+      engineConfig: engine,
       injectedContext,
       onEvent: wrappedOnEvent,
       abortSignal,
@@ -1039,8 +1178,20 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal, inje
   if (injectedContext) systemParts.push(injectedContext);
   messages.unshift({ role: "system", content: systemParts.join("\n\n") });
 
-  // Build tools from MCP Manager (long-running process)
-  const { tools, onToolCall } = await buildMCPTools();
+  // Build tools: built-in + MCP
+  const { tools: mcpTools, onToolCall: mcpOnToolCall } = await buildMCPTools();
+  const allTools = [...BUILTIN_TOOL_DEFINITIONS, ...mcpTools];
+
+  // Unified tool dispatcher: built-in tools handled locally, others via MCP
+  const onToolCall = async (name, args) => {
+    if (BUILTIN_TOOL_NAMES.has(name)) {
+      return await executeBuiltinTool(name, args);
+    }
+    if (mcpOnToolCall) {
+      return await mcpOnToolCall(name, args);
+    }
+    return JSON.stringify({ error: `Unknown tool: ${name}` });
+  };
 
   // Insert placeholder message, update progressively
   const msg = addMessage(conv.id, "assistant", "...");
@@ -1065,8 +1216,8 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal, inje
   await streamOpenAI({
     messages,
     engineConfig: engine,
-    tools: tools.length > 0 ? tools : undefined,
-    onToolCall: tools.length > 0 ? onToolCall : undefined,
+    tools: allTools.length > 0 ? allTools : undefined,
+    onToolCall: allTools.length > 0 ? onToolCall : undefined,
     onEvent: wrappedOnEvent,
     abortSignal,
   });
