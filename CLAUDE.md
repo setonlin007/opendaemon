@@ -264,6 +264,20 @@ self_coded_tools (id INTEGER PK, tool_name UNIQUE, description, input_schema JSO
 
 ## Development Rules
 
+### Deployment Protocol (MANDATORY)
+
+**Every deployment must follow this exact sequence, no exceptions regardless of change size:**
+
+1. Make code changes
+2. Run syntax checks (`node --check` for JS, `python3 -c "import ast; ..."` for Python)
+3. `git add` + `git commit` + `git push origin main`
+4. **STOP and ask the user: "代码已提交推送，准备好部署了吗？"**
+5. **WAIT for explicit user confirmation** (e.g. "确认", "发布", "部署")
+6. Only then run: `CONV_ID=<id> bash scripts/deploy.sh` or `pm2 restart`
+7. Tell the user: "正在部署，页面会在几秒后自动刷新。"
+
+**NEVER skip step 4-5.** Not for bugfixes, not for small changes, not for "obvious" deployments. The user must always confirm before any server restart.
+
 ### Code Style
 
 1. **ES modules only** — `import/export`, no `require()`
