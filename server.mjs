@@ -8,10 +8,11 @@ import { homedir } from "os";
 import { loadConfig, getEngineById, getEngines, getEngineFullConfig, saveEngines, mergeEngineUpdate } from "./lib/config.mjs";
 import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
 import { createAuth } from "./lib/auth.mjs";
-import { streamClaude, fetchCommands } from "./lib/engine-claude.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
 import { BUILTIN_TOOL_DEFINITIONS, BUILTIN_TOOL_NAMES, executeBuiltinTool } from "./lib/builtin-tools.mjs";
 import { MCPManager } from "./lib/mcp-manager.mjs";
+import { registerEngine, getEngineHandler } from "./lib/engine-registry.mjs";
+import { loadPlugins } from "./lib/plugin-loader.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
 import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST } from "./lib/attachments.mjs";
 import { parseMultipart } from "./lib/multipart.mjs";
@@ -86,6 +87,55 @@ try {
     .run();
   if (cleaned.changes > 0) console.log(`[init] cleaned ${cleaned.changes} interrupted streaming message(s)`);
 } catch {}
+
+// ── Register built-in openai engine + load plugins ──
+registerEngine({
+  metadata: { type: "openai", name: "OpenAI-Compatible", description: "Any OpenAI-compatible API", category: "api" },
+  handleChat: (...args) => handleOpenAIChat(...args),
+  streamSimple: async ({ prompt, engineConfig, onEvent, abortSignal }) => {
+    const messages = [{ role: "user", content: prompt }];
+    await streamOpenAI({ messages, engineConfig, onEvent, abortSignal });
+  },
+  test: async (engine) => {
+    const { baseUrl, apiKey, model } = engine.provider;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const resp = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "Say hi" }], max_tokens: 10 }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => "unknown");
+        return { ok: false, error: `HTTP ${resp.status}: ${errText.substring(0, 200)}` };
+      }
+      return { ok: true };
+    } catch (err) {
+      clearTimeout(timeout);
+      return { ok: false, error: err.name === "AbortError" ? "Connection timeout (15s)" : err.message };
+    }
+  },
+});
+await loadPlugins();
+
+// Dependencies injected into plugin handleChat calls
+const serverDeps = {
+  addMessage,
+  updateMessageContent,
+  updateConversationSdkSession,
+  getMessages,
+  getAttachmentsForMessages,
+  buildClaudeContent,
+  buildOpenAIContent,
+  buildMCPTools: () => buildMCPTools(),
+  BUILTIN_TOOL_DEFINITIONS,
+  BUILTIN_TOOL_NAMES,
+  executeBuiltinTool,
+  config,
+};
 
 console.log(`[init] ${config.engines.length} engines configured, listening on ${HOST}:${PORT}`);
 
@@ -226,58 +276,12 @@ const server = http.createServer(async (req, res) => {
 
     const start = Date.now();
     try {
-      if (engine.type === "openai") {
-        const { baseUrl, apiKey, model } = engine.provider;
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
-        const resp = await fetch(`${baseUrl}/chat/completions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model, messages: [{ role: "user", content: "Say hi" }], max_tokens: 10 }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (!resp.ok) {
-          const errText = await resp.text().catch(() => "unknown");
-          json(res, { ok: false, error: `HTTP ${resp.status}: ${errText.substring(0, 200)}`, latency_ms: Date.now() - start });
-          return;
-        }
-        json(res, { ok: true, latency_ms: Date.now() - start });
-      } else if (engine.type === "claude-sdk") {
-        const apiKey = engine.provider?.apiKey || process.env.ANTHROPIC_API_KEY;
-        if (apiKey) {
-          // Has API key — verify it with a lightweight API call
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 15000);
-          const resp = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": apiKey,
-              "anthropic-version": "2023-06-01",
-            },
-            body: JSON.stringify({ model: engine.model || "claude-sonnet-4-20250514", max_tokens: 10, messages: [{ role: "user", content: "Hi" }] }),
-            signal: controller.signal,
-          });
-          clearTimeout(timeout);
-          if (!resp.ok) {
-            const errText = await resp.text().catch(() => "unknown");
-            json(res, { ok: false, error: `HTTP ${resp.status}: ${errText.substring(0, 200)}`, latency_ms: Date.now() - start });
-            return;
-          }
-          json(res, { ok: true, latency_ms: Date.now() - start });
-        } else {
-          // No API key — using OAuth mode, check if SDK credentials exist
-          const homeDir = process.env.HOME || process.env.USERPROFILE || "";
-          const oauthPath = join(homeDir, ".claude");
-          if (existsSync(oauthPath)) {
-            json(res, { ok: true, latency_ms: 0, note: "OAuth mode (credentials managed by Claude SDK)" });
-          } else {
-            json(res, { ok: false, error: "No API key and no OAuth credentials found. Run 'claude login' or set provider.apiKey." });
-          }
-        }
+      const testHandler = getEngineHandler(engine.type);
+      if (testHandler?.test) {
+        const result = await testHandler.test(engine);
+        json(res, { ...result, latency_ms: result.latency_ms ?? (Date.now() - start) });
       } else {
-        json(res, { ok: false, error: `Unknown engine type: ${engine.type}` });
+        json(res, { ok: false, error: `No test available for engine type: ${engine.type}` });
       }
     } catch (err) {
       json(res, { ok: false, error: err.name === "AbortError" ? "Connection timeout (15s)" : err.message, latency_ms: Date.now() - start });
@@ -287,7 +291,9 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "GET" && path === "/api/commands") {
     try {
-      const data = await fetchCommands();
+      // Get commands from any plugin that provides them (e.g. Claude SDK)
+      const claudeHandler = getEngineHandler("claude-sdk");
+      const data = claudeHandler?.getCommands ? await claudeHandler.getCommands() : { commands: [] };
       json(res, data);
     } catch (err) {
       json(res, { error: err.message }, 500);
@@ -630,14 +636,12 @@ const server = http.createServer(async (req, res) => {
     console.log(`[chat] ${conv.id} engine=${conv.engine_id} attachments=${attachments.length} prompt="${promptText.substring(0, 50)}"`);
 
     try {
-      if (engine.type === "claude-sdk") {
-        const result = await handleClaudeChat(conv, engine, promptText, onEvent, abortController.signal, injection.context, attachments);
-        traceData.assistantMsgId = result?.msgId;
-      } else if (engine.type === "openai") {
-        const result = await handleOpenAIChat(conv, engine, promptText, onEvent, abortController.signal, injection.context, attachments);
+      const handler = getEngineHandler(engine.type);
+      if (handler) {
+        const result = await handler.handleChat(conv, engine, promptText, onEvent, abortController.signal, injection.context, attachments, serverDeps);
         traceData.assistantMsgId = result?.msgId;
       } else {
-        onEvent("error", { message: `Unknown engine type: ${engine.type}` });
+        onEvent("error", { message: `Unknown engine type: ${engine.type}. Is the plugin installed?` });
       }
     } catch (err) {
       if (!closed) {
@@ -791,11 +795,9 @@ const server = http.createServer(async (req, res) => {
     };
 
     try {
-      if (engine.type === "claude-sdk") {
-        await streamClaude({ prompt: prep.prompt, convId: null, mcpServers: {}, onEvent: reflectOnEvent, abortSignal: abortController.signal });
-      } else if (engine.type === "openai") {
-        const messages = [{ role: "user", content: prep.prompt }];
-        await streamOpenAI({ messages, engineConfig: engine, onEvent: reflectOnEvent, abortSignal: abortController.signal });
+      const reflectHandler = getEngineHandler(engine.type);
+      if (reflectHandler?.streamSimple) {
+        await reflectHandler.streamSimple({ prompt: prep.prompt, engineConfig: engine, onEvent: reflectOnEvent, abortSignal: abortController.signal });
       }
 
       const inputTokens = usage?.input_tokens || usage?.prompt_tokens || null;
@@ -1099,68 +1101,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ── Engine handlers ──
-
-async function handleClaudeChat(conv, engine, prompt, onEvent, abortSignal, injectedContext = "", attachments = []) {
-  // Build MCP servers from config
-  const mcpServers = {};
-  const mcpConfig = config.mcp || {};
-  for (const [name, serverConfig] of Object.entries(mcpConfig)) {
-    mcpServers[name] = serverConfig;
-  }
-
-  // Insert placeholder message at start, update progressively
-  const msg = addMessage(conv.id, "assistant", "...");
-  let streamedText = "";
-  let lastFlush = Date.now();
-  const FLUSH_INTERVAL = 3000;
-
-  const wrappedOnEvent = (event, data) => {
-    let dirty = false;
-    if (event === "delta" && data.text) {
-      streamedText += data.text;
-      dirty = true;
-    } else if (event === "text" && data.text) {
-      // Complete text block (between tool calls)
-      streamedText = data.text;
-      dirty = true;
-    } else if (event === "tool_use" && data.name) {
-      streamedText += `\n\n> Tool: ${data.name}${data.input?.command ? ` — ${data.input.command.substring(0, 60)}` : data.input?.file_path ? ` — ${data.input.file_path}` : ""}\n`;
-      dirty = true;
-    }
-    if (dirty) {
-      const now = Date.now();
-      if (now - lastFlush >= FLUSH_INTERVAL) {
-        updateMessageContent(msg.id, streamedText + "\n\n<!-- streaming -->");
-        lastFlush = now;
-      }
-    }
-    onEvent(event, data);
-  };
-
-  // Build multimodal prompt if attachments present
-  const effectivePrompt = attachments.length > 0 ? buildClaudeContent(prompt, attachments) : prompt;
-
-  let sessionId, resultText;
-  try {
-    ({ sessionId, resultText } = await streamClaude({
-      prompt: effectivePrompt,
-      convId: conv.id,
-      sdkSessionId: conv.sdk_session,
-      mcpServers,
-      engineConfig: engine,
-      injectedContext,
-      onEvent: wrappedOnEvent,
-      abortSignal,
-    }));
-  } finally {
-    // Always remove streaming marker, even on error/abort
-    const finalText = resultText || streamedText || "...";
-    updateMessageContent(msg.id, finalText);
-  }
-
-  if (sessionId) updateConversationSdkSession(conv.id, sessionId);
-  return { msgId: msg.id };
-}
+// handleClaudeChat → migrated to plugins/engine-claude-sdk/index.mjs
 
 async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal, injectedContext = "", attachments = []) {
   // Build messages array from history (exclude placeholder "..." messages)
