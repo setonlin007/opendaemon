@@ -3304,43 +3304,84 @@ function buildEngineFields(e) {
       <input type="hidden" id="engType" value="openai">
     `;
   } else {
+    // Detect authMode from existing config
+    const authMode = e.provider?.baseUrl ? 'custom' : (e.provider?.apiKey ? 'apikey' : 'oauth');
     return `
       <div class="eng-field-row">
         <div class="eng-field"><label>Name</label><input id="engLabel" value="${esc(e.label || '')}"></div>
         <div class="eng-field" style="max-width:60px"><label>Icon</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
       </div>
-      <div class="eng-field"><label>Model</label>
-        <select id="engModel">
-          <option value="">Default</option>
-          <option value="claude-opus-4-6"${e.model === 'claude-opus-4-6' ? ' selected' : ''}>Claude Opus 4</option>
-          <option value="claude-sonnet-4-5-20250929"${e.model === 'claude-sonnet-4-5-20250929' ? ' selected' : ''}>Claude Sonnet 4.5</option>
-          <option value="claude-haiku-3-5-20241022"${e.model === 'claude-haiku-3-5-20241022' ? ' selected' : ''}>Claude Haiku 3.5</option>
+      <div class="eng-field"><label>Auth Mode</label>
+        <select id="engAuthMode" onchange="onAuthModeChange()">
+          <option value="oauth"${authMode === 'oauth' ? ' selected' : ''}>OAuth (already logged in, zero config)</option>
+          <option value="apikey"${authMode === 'apikey' ? ' selected' : ''}>API Key (Anthropic direct)</option>
+          <option value="custom"${authMode === 'custom' ? ' selected' : ''}>Custom URL + Key (OpenRouter, etc.)</option>
         </select>
       </div>
-      <div class="eng-field"><label>API Key (optional, uses env if empty)</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-ant-..."></div>
-      <div class="eng-field-row">
-        <div class="eng-field"><label>Platform</label>
-          <select id="engPlatform">
-            <option value="anthropic"${(e.provider?.platform || 'anthropic') === 'anthropic' ? ' selected' : ''}>Anthropic</option>
-            <option value="bedrock"${e.provider?.platform === 'bedrock' ? ' selected' : ''}>AWS Bedrock</option>
-            <option value="vertex"${e.provider?.platform === 'vertex' ? ' selected' : ''}>Google Vertex</option>
-            <option value="foundry"${e.provider?.platform === 'foundry' ? ' selected' : ''}>Azure Foundry</option>
-          </select>
-        </div>
-        <div class="eng-field"><label>Effort</label>
-          <select id="engEffort">
-            <option value=""${!e.options?.effort ? ' selected' : ''}>Default (high)</option>
-            <option value="low"${e.options?.effort === 'low' ? ' selected' : ''}>Low</option>
-            <option value="medium"${e.options?.effort === 'medium' ? ' selected' : ''}>Medium</option>
-            <option value="high"${e.options?.effort === 'high' ? ' selected' : ''}>High</option>
-            <option value="max"${e.options?.effort === 'max' ? ' selected' : ''}>Max</option>
-          </select>
-        </div>
-      </div>
-      <div class="eng-field"><label>Budget Limit (USD per conversation, optional)</label><input id="engBudget" type="number" step="0.5" value="${e.options?.maxBudgetUsd || ''}" placeholder="e.g. 5"></div>
+      <div id="engAuthFields">${buildAgenticAuthFields(authMode, e)}</div>
+      <input type="hidden" id="engType" value="claude-sdk">
+    `;
       <input type="hidden" id="engType" value="claude-sdk">
     `;
   }
+}
+
+function buildAgenticAuthFields(mode, e = {}) {
+  const model = e.model || '';
+  const effort = e.options?.effort || '';
+  const budget = e.options?.maxBudgetUsd || '';
+  const modelSelect = `
+    <div class="eng-field"><label>Model</label>
+      <select id="engModel">
+        <option value="">Default</option>
+        <option value="claude-opus-4-6"${model === 'claude-opus-4-6' ? ' selected' : ''}>Claude Opus 4</option>
+        <option value="claude-sonnet-4-5-20250929"${model === 'claude-sonnet-4-5-20250929' ? ' selected' : ''}>Claude Sonnet 4.5</option>
+        <option value="claude-haiku-3-5-20241022"${model === 'claude-haiku-3-5-20241022' ? ' selected' : ''}>Claude Haiku 3.5</option>
+      </select>
+    </div>`;
+  const effortSelect = `
+    <div class="eng-field"><label>Effort</label>
+      <select id="engEffort">
+        <option value=""${!effort ? ' selected' : ''}>Default (high)</option>
+        <option value="low"${effort === 'low' ? ' selected' : ''}>Low</option>
+        <option value="medium"${effort === 'medium' ? ' selected' : ''}>Medium</option>
+        <option value="high"${effort === 'high' ? ' selected' : ''}>High</option>
+        <option value="max"${effort === 'max' ? ' selected' : ''}>Max</option>
+      </select>
+    </div>`;
+
+  if (mode === 'oauth') {
+    return `
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Using local OAuth credentials from <code>claude login</code></div>
+      <div class="eng-field-row">${modelSelect}${effortSelect}</div>`;
+  }
+  if (mode === 'apikey') {
+    return `
+      <div class="eng-field"><label>API Key</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-ant-..."></div>
+      <div class="eng-field-row">${modelSelect}${effortSelect}</div>
+      <div class="eng-field"><label>Budget Limit (USD per conversation, optional)</label><input id="engBudget" type="number" step="0.5" value="${budget}" placeholder="e.g. 5"></div>`;
+  }
+  // custom
+  return `
+    <div class="eng-field"><label>Base URL</label><input id="engBaseUrl" value="${esc(e.provider?.baseUrl || '')}" placeholder="https://openrouter.ai/api/v1"></div>
+    <div class="eng-field"><label>API Key</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-or-..."></div>
+    <div class="eng-field-row">
+      <div class="eng-field"><label>Model</label><input id="engModel" value="${esc(e.provider?.model || model || '')}" placeholder="anthropic/claude-sonnet-4"></div>
+      <div class="eng-field"><label>Format</label>
+        <select id="engFormat">
+          <option value="openai"${(e.provider?.format || 'openai') === 'openai' ? ' selected' : ''}>OpenAI Compatible</option>
+          <option value="anthropic"${e.provider?.format === 'anthropic' ? ' selected' : ''}>Anthropic Compatible</option>
+        </select>
+      </div>
+    </div>
+    <div class="eng-field-row">${effortSelect}
+      <div class="eng-field"><label>Budget Limit</label><input id="engBudget" type="number" step="0.5" value="${budget}" placeholder="e.g. 5"></div>
+    </div>`;
+}
+
+function onAuthModeChange() {
+  const mode = $('engAuthMode')?.value || 'oauth';
+  $('engAuthFields').innerHTML = buildAgenticAuthFields(mode);
 }
 
 async function saveEngineForm(isEdit) {
@@ -3364,14 +3405,30 @@ async function saveEngineForm(isEdit) {
     else if (apiKey) payload.provider.apiKey = apiKey; // masked value, server will keep original
   } else {
     payload.type = 'claude-sdk';
-    if (model) payload.model = model;
-    const platform = $('engPlatform')?.value;
+    const authMode = $('engAuthMode')?.value || 'oauth';
     const effort = $('engEffort')?.value;
     const budget = $('engBudget')?.value;
     payload.provider = {};
-    if (apiKey && !apiKey.includes('***')) payload.provider.apiKey = apiKey;
-    else if (apiKey) payload.provider.apiKey = apiKey;
-    if (platform && platform !== 'anthropic') payload.provider.platform = platform;
+    payload.provider.authMode = authMode;
+
+    if (authMode === 'apikey') {
+      if (apiKey && !apiKey.includes('***')) payload.provider.apiKey = apiKey;
+      else if (apiKey) payload.provider.apiKey = apiKey;
+      if (model) payload.model = model;
+    } else if (authMode === 'custom') {
+      const baseUrl = $('engBaseUrl')?.value?.trim();
+      const format = $('engFormat')?.value || 'openai';
+      if (!baseUrl) { alert('Base URL is required'); return; }
+      payload.provider.baseUrl = baseUrl;
+      payload.provider.format = format;
+      if (apiKey && !apiKey.includes('***')) payload.provider.apiKey = apiKey;
+      else if (apiKey) payload.provider.apiKey = apiKey;
+      if (model) payload.provider.model = model;
+    } else {
+      // oauth — minimal config
+      if (model) payload.model = model;
+    }
+
     const opts = {};
     if (effort) opts.effort = effort;
     if (budget) opts.maxBudgetUsd = parseFloat(budget);

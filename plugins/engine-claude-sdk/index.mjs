@@ -7,6 +7,7 @@
 
 import { streamClaude, fetchCommands } from "../../lib/engine-claude.mjs";
 import { loadConfig } from "../../lib/config.mjs";
+import { ensureProxy, encodeBackendConfig } from "../../lib/anthropic-proxy.mjs";
 import { existsSync } from "fs";
 import { join } from "path";
 
@@ -98,11 +99,50 @@ export async function streamSimple({ prompt, engineConfig, onEvent, abortSignal 
 }
 
 /**
- * Connection test — verify API key or OAuth credentials.
+ * Connection test — supports OAuth, API Key, and Custom URL modes.
  */
 export async function test(engine) {
-  const apiKey = engine.provider?.apiKey || process.env.ANTHROPIC_API_KEY;
-  if (apiKey) {
+  const provider = engine.provider || {};
+
+  if (provider.baseUrl) {
+    // Custom URL mode — test via proxy
+    const { port } = await ensureProxy();
+    const encoded = encodeBackendConfig({
+      url: provider.baseUrl,
+      key: provider.apiKey || "",
+      format: provider.format || "openai",
+      model: provider.model || engine.model || "",
+    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const resp = await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": encoded,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: engine.model || "claude-sonnet-4-20250514",
+          max_tokens: 10,
+          messages: [{ role: "user", content: "Hi" }],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => "unknown");
+        return { ok: false, error: `Proxy test ${resp.status}: ${errText.substring(0, 200)}` };
+      }
+      return { ok: true, note: `via proxy → ${provider.baseUrl}` };
+    } catch (err) {
+      clearTimeout(timeout);
+      return { ok: false, error: err.name === "AbortError" ? "Connection timeout (15s)" : err.message };
+    }
+  } else if (provider.apiKey || process.env.ANTHROPIC_API_KEY) {
+    // API Key mode — direct Anthropic test
+    const apiKey = provider.apiKey || process.env.ANTHROPIC_API_KEY;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
@@ -131,6 +171,7 @@ export async function test(engine) {
       return { ok: false, error: err.name === "AbortError" ? "Connection timeout (15s)" : err.message };
     }
   } else {
+    // OAuth mode
     const homeDir = process.env.HOME || process.env.USERPROFILE || "";
     const oauthPath = join(homeDir, ".claude");
     if (existsSync(oauthPath)) {
