@@ -579,8 +579,8 @@ http://localhost:3000</pre>
   <p class="section-subtitle reveal">持续迭代，每一步都是进化</p>
   <div class="timeline">
     <div class="timeline-item reveal">
-      <span class="version-tag">v0.4.0</span>
-      <h3>Phase 4: Memory Evolution <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-03-30</span></h3>
+      <span class="version-tag">v0.6.0</span>
+      <h3>Memory Evolution <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-03-30</span></h3>
       <ul>
         <li>渐进式注入：rules 全文注入 + 其他知识标题索引，LLM 按需展开</li>
         <li>FTS5 全文搜索：知识检索从 LIKE 升级为 SQLite FTS5，支持分词和相关性排名</li>
@@ -590,19 +590,29 @@ http://localhost:3000</pre>
       </ul>
     </div>
     <div class="timeline-item reveal">
-      <span class="version-tag">v0.3.0</span>
-      <h3>Phase 3: Advanced Harness <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-03</span></h3>
+      <span class="version-tag">v0.5.0</span>
+      <h3>Workspace Structure <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-03</span></h3>
+      <ul>
+        <li>Workspace 多项目管理：~/workspace 统一结构 + .workspace.json 配置</li>
+        <li>Artifacts API：非代码产物的存储和浏览</li>
+        <li>文件/图片上传：拖拽上传 + 剪贴板粘贴 + 对话内预览</li>
+        <li>Evaluator UI：知识评估面板 + 反思集成</li>
+        <li>配置校验增强：所有新配置段均有类型检查和默认值</li>
+      </ul>
+    </div>
+    <div class="timeline-item reveal">
+      <span class="version-tag">v0.4.0</span>
+      <h3>Advanced Harness <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-03</span></h3>
       <ul>
         <li>Sub-Agent 子代理系统：支持 4 种专业代理（研究员 / 分析师 / 编码者 / 审阅者）</li>
         <li>知识评估器：自动对比有/无知识的回复质量</li>
         <li>A/B 提示词测试：系统提示、注入模板、反思提示可实验</li>
         <li>自编码能力：AI 可为自己提议并生成新 MCP 工具</li>
-        <li>配置校验增强：所有新配置段均有类型检查和默认值</li>
       </ul>
     </div>
     <div class="timeline-item reveal">
-      <span class="version-tag">v0.2.0</span>
-      <h3>Phase 2: Self-Evolution <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-03</span></h3>
+      <span class="version-tag">v0.3.0</span>
+      <h3>Self-Evolution <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-03</span></h3>
       <ul>
         <li>全链路追踪系统</li>
         <li>知识库（Markdown 文件 + SQLite 索引）</li>
@@ -613,12 +623,20 @@ http://localhost:3000</pre>
       </ul>
     </div>
     <div class="timeline-item reveal">
+      <span class="version-tag">v0.2.0</span>
+      <h3>MCP Capability Layer <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-02</span></h3>
+      <ul>
+        <li>MCP 工具系统（搜索 / 消息 / 提醒 / 定时任务）</li>
+        <li>多频道推送（Bark / 飞书 / 微信）</li>
+        <li>远程访问 + 移动端适配</li>
+      </ul>
+    </div>
+    <div class="timeline-item reveal">
       <span class="version-tag">v0.1.0</span>
-      <h3>Phase 0+1: Foundation <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-02</span></h3>
+      <h3>Platform Foundation <span style="color:var(--text-3);font-weight:400;font-size:14px;">— 2026-02</span></h3>
       <ul>
         <li>多引擎架构（Claude SDK + OpenAI）</li>
         <li>SSE 流式输出</li>
-        <li>MCP 工具系统（搜索 / 消息 / 提醒 / 定时）</li>
         <li>会话管理</li>
         <li>Cookie 认证</li>
       </ul>
