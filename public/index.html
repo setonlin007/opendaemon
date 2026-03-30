@@ -1961,6 +1961,7 @@ let currentConvId = null;
 let currentEngine = null;
 let isStreaming = false;
 let streamingConvId = null; // track which conversation is streaming
+let streamingGeneration = 0; // generation counter to prevent race conditions
 let abortController = null;
 let allCommands = [];
 let wasBackgrounded = false;
@@ -2581,13 +2582,18 @@ async function sendMessage() {
 
   isStreaming = true;
   streamingConvId = currentConvId;
+  const myGeneration = ++streamingGeneration; // track this send's generation
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
   sendBtn.className = 'send-btn stop';
   sendBtn.onclick = stopStreaming;
   setStatus('busy', 'Thinking');
 
   abortController = new AbortController();
-  const bubble = createAssistantBubble();
+  // Safety timeout: auto-abort if streaming hangs for 5 minutes
+  const streamTimeout = setTimeout(() => { if (abortController) abortController.abort(); }, 300000);
+  let bubble;
+  try {
+  bubble = createAssistantBubble();
   const loadingEl = document.createElement('div');
   loadingEl.className = 'loading-indicator';
   loadingEl.innerHTML = '<div class="spinner"></div><span>Thinking...</span>';
@@ -2640,10 +2646,18 @@ async function sendMessage() {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const READ_TIMEOUT_MS = 120000; // 2 min per-read timeout for stalled streams
 
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      // Race reader.read() against a timeout to prevent infinite hangs
+      let readTimer;
+      const timeoutPromise = new Promise((_, reject) => {
+        readTimer = setTimeout(() => reject(new Error('Stream read timeout')), READ_TIMEOUT_MS);
+      });
+      try {
+        const { done, value } = await Promise.race([reader.read(), timeoutPromise]);
+        clearTimeout(readTimer);
+        if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
@@ -2753,11 +2767,12 @@ async function sendMessage() {
           eventType = null;
         }
       }
+      } catch (readErr) { clearTimeout(readTimer); throw readErr; }
     }
   } catch (err) {
     if (err.name !== 'AbortError') {
       removeLoading();
-      const isNetworkError = err.message.includes('network') || err.message.includes('Failed to fetch') || err.message.includes('Load failed') || err.name === 'TypeError';
+      const isNetworkError = err.message.includes('network') || err.message.includes('Failed to fetch') || err.message.includes('Load failed') || err.message.includes('Stream read timeout') || err.name === 'TypeError';
       if (isNetworkError) {
         // If page was backgrounded (e.g. iOS app switch), recover silently
         if (document.hidden || wasBackgrounded) {
@@ -2791,16 +2806,23 @@ async function sendMessage() {
     addFeedbackButtons(bubble.closest('.message'), assistantMsgId);
   }
 
-  finishStreaming();
+  } finally {
+    clearTimeout(streamTimeout);
+    finishStreaming(myGeneration);
+  }
   // Refresh conversation list (title may have changed)
-  loadConversations();
+  if (myGeneration === streamingGeneration) loadConversations();
 }
 
 function stopStreaming() { if (abortController) abortController.abort(); finishStreaming(); }
-function finishStreaming() {
+function finishStreaming(gen) {
+  // If a generation is provided, only finish if it matches the current generation
+  // This prevents stale sendMessage async calls from resetting state of a newer request
+  if (gen !== undefined && gen !== streamingGeneration) return;
   isStreaming = false;
   streamingConvId = null;
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>'; sendBtn.className = 'send-btn'; sendBtn.onclick = sendMessage;
+  sendBtn.disabled = false; // ensure button is always re-enabled
   setStatus('', 'Ready');
   // Remove any lingering loading indicators (e.g. when stop is clicked early)
   try { document.querySelectorAll('.loading-indicator').forEach(el => el.remove()); } catch(e) {}
