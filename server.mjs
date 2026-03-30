@@ -244,32 +244,38 @@ const server = http.createServer(async (req, res) => {
         }
         json(res, { ok: true, latency_ms: Date.now() - start });
       } else if (engine.type === "claude-sdk") {
-        // For Claude SDK, verify API key is available
         const apiKey = engine.provider?.apiKey || process.env.ANTHROPIC_API_KEY;
-        if (!apiKey) {
-          json(res, { ok: false, error: "No API key configured (set provider.apiKey or ANTHROPIC_API_KEY env)" });
-          return;
+        if (apiKey) {
+          // Has API key — verify it with a lightweight API call
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+          const resp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({ model: engine.model || "claude-sonnet-4-20250514", max_tokens: 10, messages: [{ role: "user", content: "Hi" }] }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+          if (!resp.ok) {
+            const errText = await resp.text().catch(() => "unknown");
+            json(res, { ok: false, error: `HTTP ${resp.status}: ${errText.substring(0, 200)}`, latency_ms: Date.now() - start });
+            return;
+          }
+          json(res, { ok: true, latency_ms: Date.now() - start });
+        } else {
+          // No API key — using OAuth mode, check if SDK credentials exist
+          const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+          const oauthPath = join(homeDir, ".claude");
+          if (existsSync(oauthPath)) {
+            json(res, { ok: true, latency_ms: 0, note: "OAuth mode (credentials managed by Claude SDK)" });
+          } else {
+            json(res, { ok: false, error: "No API key and no OAuth credentials found. Run 'claude login' or set provider.apiKey." });
+          }
         }
-        // Make a lightweight Anthropic API call to verify the key
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
-        const resp = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({ model: engine.model || "claude-sonnet-4-20250514", max_tokens: 10, messages: [{ role: "user", content: "Hi" }] }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (!resp.ok) {
-          const errText = await resp.text().catch(() => "unknown");
-          json(res, { ok: false, error: `HTTP ${resp.status}: ${errText.substring(0, 200)}`, latency_ms: Date.now() - start });
-          return;
-        }
-        json(res, { ok: true, latency_ms: Date.now() - start });
       } else {
         json(res, { ok: false, error: `Unknown engine type: ${engine.type}` });
       }
