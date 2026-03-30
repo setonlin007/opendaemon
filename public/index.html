@@ -2188,6 +2188,15 @@ async function selectConversation(id) {
   inputEl.disabled = false;
   sendBtn.disabled = false;
 
+  // Auto-recover stale streaming state when switching conversations
+  if (isStreaming && streamingConvId !== id) {
+    const stale = !abortController || abortController.signal.aborted;
+    if (stale) {
+      console.warn('[selectConversation] Clearing stale streaming state');
+      finishStreaming();
+    }
+  }
+
   // Sync stop button & status indicator with whether THIS conversation is streaming
   if (isStreaming && streamingConvId === id) {
     sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
@@ -2569,7 +2578,20 @@ function openLightbox(url) {
 async function sendMessage() {
   const text = inputEl.value.trim();
   const hasAttachments = pendingAttachments.length > 0;
-  if ((!text && !hasAttachments) || isStreaming || !currentConvId) return;
+  if (!text && !hasAttachments) return;
+  if (!currentConvId) return;
+  // Auto-recover from stale streaming state:
+  // If isStreaming is true but we're on a different conversation, or abortController is gone/aborted,
+  // the previous stream is dead — force cleanup and allow sending
+  if (isStreaming) {
+    const stale = !abortController || abortController.signal.aborted || streamingConvId !== currentConvId;
+    if (stale) {
+      console.warn('[sendMessage] Detected stale isStreaming, auto-recovering');
+      finishStreaming();
+    } else {
+      return; // genuinely still streaming this conversation
+    }
+  }
   hideAutocomplete();
 
   const sendAttachments = [...pendingAttachments];
