@@ -4978,6 +4978,14 @@ function renderEnginePicker() {
   }
 }
 
+// ── Prevent mobile back-swipe from navigating away ──
+history.replaceState({ app: true }, '');
+history.pushState({ app: true }, '');
+window.addEventListener('popstate', (e) => {
+  // User swiped back — push state again to stay on this page
+  history.pushState({ app: true }, '');
+});
+
 // ── Start ──
 I18N.translatePage();
 init();

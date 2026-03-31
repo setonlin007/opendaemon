@@ -75,6 +75,9 @@ body {
   <div class="error" id="err"></div>
 </div>
 <script>
+// If already authenticated, redirect to main page
+fetch('/api/ping').then(r => { if (r.ok) window.location.replace('/'); }).catch(() => {});
+
 function applyLang() {
   I18N.translatePage();
   document.getElementById('pw').placeholder = t('password');
@@ -94,7 +97,7 @@ async function login(e) {
       body: JSON.stringify({ password: document.getElementById('pw').value }),
     });
     if (res.ok) {
-      window.location.href = '/';
+      window.location.replace('/');
     } else {
       const data = await res.json();
       err.textContent = data.error || t('loginFailed');
