@@ -2018,8 +2018,8 @@ async function init() {
       messagesEl.innerHTML = '';
       for (const m of msgs) {
         if (m.role === 'user') addUserBubble(m.content);
-        else if (m.content === '...') addStreamingBubble();
-        else if (m.content.includes('<!-- streaming -->')) addStreamingBubble(m.content.replace('<!-- streaming -->', ''));
+        else if (m.content === '...') addStreamingBubble(null, m.id);
+        else if (m.content.includes('<!-- streaming -->')) addStreamingBubble(m.content.replace('<!-- streaming -->', ''), m.id);
         else addAssistantBubble(m.content);
       }
       scrollToBottom();
@@ -2243,8 +2243,8 @@ async function selectConversation(id) {
   } else {
     for (const m of msgs) {
       if (m.role === 'user') addUserBubble(m.content, m.attachments);
-      else if (m.content === '...') addStreamingBubble();
-      else if (m.content.includes('<!-- streaming -->')) addStreamingBubble(m.content.replace('<!-- streaming -->', ''));
+      else if (m.content === '...') addStreamingBubble(null, m.id);
+      else if (m.content.includes('<!-- streaming -->')) addStreamingBubble(m.content.replace('<!-- streaming -->', ''), m.id);
       else {
         addAssistantBubble(m.content);
         // Add feedback buttons to loaded assistant messages
@@ -2939,7 +2939,7 @@ function copyMsg(btn) {
     setTimeout(() => btn.textContent = t('copy'), 1500);
   });
 }
-function addStreamingBubble(partialContent) {
+function addStreamingBubble(partialContent, msgId) {
   const div = document.createElement('div'); div.className = 'message assistant';
   const spinnerHtml = `<div class="loading-indicator"><div class="spinner"></div><span>${t('responding')}</span></div>`;
   if (partialContent) {
@@ -2949,9 +2949,11 @@ function addStreamingBubble(partialContent) {
   }
   div.dataset.streaming = '1';
   messagesEl.appendChild(div);
+  if (!msgId) return; // No msgId = no polling (avoid wrong content)
   let pollCount = 0;
   const MAX_POLLS = 10; // 10 * 2s = 20 seconds max (page refresh recovery)
   const savedConvId = currentConvId;
+  const findMsg = (msgs) => msgs.find(m => m.id === msgId);
   const pollFn = async () => {
     pollCount++;
     if (!currentConvId || currentConvId !== savedConvId || pollCount > MAX_POLLS) {
@@ -2959,9 +2961,9 @@ function addStreamingBubble(partialContent) {
       // Timeout: fetch final state and render whatever is there
       try {
         const msgs = await api('GET', `/api/conversations/${currentConvId}/messages`);
-        const last = msgs[msgs.length - 1];
-        if (last && last.role === 'assistant' && last.content !== '...') {
-          div.querySelector('.bubble').innerHTML = renderMd(last.content.replace('<!-- streaming -->', ''));
+        const target = findMsg(msgs);
+        if (target && target.role === 'assistant' && target.content !== '...') {
+          div.querySelector('.bubble').innerHTML = renderMd(target.content.replace('<!-- streaming -->', ''));
         } else {
           div.remove(); // Remove empty bubble
         }
@@ -2971,14 +2973,14 @@ function addStreamingBubble(partialContent) {
     }
     try {
       const msgs = await api('GET', `/api/conversations/${currentConvId}/messages`);
-      const last = msgs[msgs.length - 1];
-      if (!last || last.role !== 'assistant') { clearInterval(poll); div.remove(); return; }
-      if (last.content.includes('<!-- streaming -->')) {
-        div.querySelector('.bubble').innerHTML = renderMd(last.content.replace('<!-- streaming -->', '')) + spinnerHtml;
+      const target = findMsg(msgs);
+      if (!target || target.role !== 'assistant') { clearInterval(poll); div.remove(); return; }
+      if (target.content.includes('<!-- streaming -->')) {
+        div.querySelector('.bubble').innerHTML = renderMd(target.content.replace('<!-- streaming -->', '')) + spinnerHtml;
         scrollToBottom();
-      } else if (last.content !== '...') {
+      } else if (target.content !== '...') {
         clearInterval(poll);
-        div.querySelector('.bubble').innerHTML = renderMd(last.content);
+        div.querySelector('.bubble').innerHTML = renderMd(target.content);
         delete div.dataset.streaming;
         scrollToBottom();
       }
