@@ -278,6 +278,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Tunnel URL ──
+
+  if (method === "GET" && path === "/api/tunnel") {
+    try {
+      const { getTunnelUrl } = await import("./lib/tunnel.mjs");
+      json(res, { url: getTunnelUrl() });
+    } catch {
+      json(res, { url: null });
+    }
+    return;
+  }
+
   // ── Init (combined endpoint to reduce round-trips) ──
 
   if (method === "GET" && path === "/api/init") {
@@ -1349,14 +1361,26 @@ async function startup() {
     console.log("[init] evaluator not started:", err.message);
   }
 
-  server.listen(PORT, HOST, () => {
+  server.listen(PORT, HOST, async () => {
     console.log(`OpenDaemon running at http://${HOST}:${PORT}`);
+
+    // Auto-start Cloudflare Tunnel if enabled
+    if (config.tunnel?.enabled !== false) {
+      try {
+        const { startTunnel } = await import("./lib/tunnel.mjs");
+        const url = await startTunnel(PORT);
+        console.log(`OpenDaemon available at ${url}`);
+      } catch (err) {
+        console.log(`[tunnel] not started: ${err.message}`);
+      }
+    }
   });
 }
 
 // Graceful shutdown
-function shutdown() {
+async function shutdown() {
   console.log("[shutdown] stopping...");
+  try { const { stopTunnel } = await import("./lib/tunnel.mjs"); stopTunnel(); } catch {}
   if (mcpManager) mcpManager.stop().catch(() => {});
   server.close();
   process.exit(0);
