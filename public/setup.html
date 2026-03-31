@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenDaemon — Setup</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f0f1a;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wizard {
+  width: 440px;
+  max-width: 95vw;
+  padding: 40px;
+  background: #1a1a2e;
+  border-radius: 16px;
+  border: 1px solid #2a2a4a;
+}
+.wizard h1 {
+  font-size: 24px;
+  margin-bottom: 4px;
+  background: linear-gradient(135deg, #e94560, #533483);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.wizard .subtitle { font-size: 13px; color: #666; margin-bottom: 28px; }
+.step { display: none; }
+.step.active { display: block; }
+.step h2 { font-size: 16px; margin-bottom: 16px; color: #ccc; }
+label { display: block; font-size: 13px; color: #999; margin-bottom: 6px; margin-top: 16px; }
+label:first-of-type { margin-top: 0; }
+input, select {
+  width: 100%;
+  padding: 10px 14px;
+  background: #16213e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  color: #e0e0e0;
+  font-size: 14px;
+  outline: none;
+}
+input:focus, select:focus { border-color: #e94560; }
+.hint { font-size: 11px; color: #555; margin-top: 4px; }
+.engine-cards {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.engine-card {
+  flex: 1;
+  padding: 16px 12px;
+  background: #16213e;
+  border: 2px solid #2a2a4a;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+.engine-card:hover { border-color: #444; }
+.engine-card.selected { border-color: #e94560; background: #1e1535; }
+.engine-card .icon { font-size: 28px; margin-bottom: 6px; }
+.engine-card .name { font-size: 13px; font-weight: 600; }
+.engine-card .desc { font-size: 11px; color: #666; margin-top: 4px; }
+.api-fields { margin-top: 16px; display: none; }
+.api-fields.show { display: block; }
+.btn-row { display: flex; gap: 10px; margin-top: 28px; }
+.btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #e94560, #533483);
+  color: white;
+}
+.btn-secondary {
+  background: #16213e;
+  color: #aaa;
+  border: 1px solid #2a2a4a;
+}
+.btn:hover { opacity: 0.9; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.error { color: #f87171; font-size: 13px; margin-top: 8px; display: none; }
+.progress {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.progress .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2a2a4a;
+}
+.progress .dot.active { background: #e94560; }
+.progress .dot.done { background: #4ade80; }
+.success {
+  text-align: center;
+  padding: 20px 0;
+}
+.success .check { font-size: 48px; margin-bottom: 16px; }
+.success p { color: #999; font-size: 14px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="wizard">
+  <h1>OpenDaemon</h1>
+  <p class="subtitle">First-time setup — takes 30 seconds</p>
+
+  <div class="progress">
+    <div class="dot active" id="dot1"></div>
+    <div class="dot" id="dot2"></div>
+    <div class="dot" id="dot3"></div>
+  </div>
+
+  <!-- Step 1: Password -->
+  <div class="step active" id="step1">
+    <h2>Set your password</h2>
+    <label>Password</label>
+    <input type="password" id="password" placeholder="Choose a strong password" autofocus>
+    <label>Confirm Password</label>
+    <input type="password" id="password2" placeholder="Confirm password">
+    <div class="error" id="pwError"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="nextStep(1)">Next</button>
+    </div>
+  </div>
+
+  <!-- Step 2: Engine -->
+  <div class="step" id="step2">
+    <h2>Choose your AI engine</h2>
+    <div class="engine-cards">
+      <div class="engine-card selected" onclick="selectEngine('claude-sdk')" id="cardClaude">
+        <div class="icon">C</div>
+        <div class="name">Claude</div>
+        <div class="desc">Full agent with tools & thinking</div>
+      </div>
+      <div class="engine-card" onclick="selectEngine('openai')" id="cardOpenAI">
+        <div class="icon">A</div>
+        <div class="name">API Engine</div>
+        <div class="desc">OpenAI, Gemini, Kimi, etc.</div>
+      </div>
+      <div class="engine-card" onclick="selectEngine('both')" id="cardBoth">
+        <div class="icon">+</div>
+        <div class="name">Both</div>
+        <div class="desc">Claude + API engine</div>
+      </div>
+    </div>
+    <div class="api-fields" id="apiFields">
+      <label>Engine Name</label>
+      <input type="text" id="engineLabel" placeholder="e.g. Kimi K2, Gemini, GPT-4o">
+      <label>API Base URL</label>
+      <input type="text" id="baseUrl" placeholder="e.g. https://openrouter.ai/api/v1">
+      <label>API Key</label>
+      <input type="password" id="apiKey" placeholder="sk-...">
+      <label>Model</label>
+      <input type="text" id="model" placeholder="e.g. moonshotai/kimi-k2">
+    </div>
+    <div class="error" id="engineError"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep(2)">Back</button>
+      <button class="btn btn-primary" onclick="nextStep(2)">Next</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Confirm & Create -->
+  <div class="step" id="step3">
+    <h2>Ready to go!</h2>
+    <div id="summary" style="background:#16213e;padding:16px;border-radius:8px;font-size:13px;line-height:1.8;"></div>
+    <div class="error" id="setupError"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep(3)">Back</button>
+      <button class="btn btn-primary" id="createBtn" onclick="doSetup()">Create & Start</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Success -->
+  <div class="step" id="step4">
+    <div class="success">
+      <div class="check">&#10003;</div>
+      <h2>Setup Complete!</h2>
+      <p>Redirecting to login...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentStep = 1;
+let engineType = 'claude-sdk';
+
+function selectEngine(type) {
+  engineType = type;
+  document.querySelectorAll('.engine-card').forEach(c => c.classList.remove('selected'));
+  if (type === 'claude-sdk') document.getElementById('cardClaude').classList.add('selected');
+  else if (type === 'openai') document.getElementById('cardOpenAI').classList.add('selected');
+  else document.getElementById('cardBoth').classList.add('selected');
+  document.getElementById('apiFields').className = (type === 'openai' || type === 'both') ? 'api-fields show' : 'api-fields';
+}
+
+function showStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + n).classList.add('active');
+  for (let i = 1; i <= 3; i++) {
+    const dot = document.getElementById('dot' + i);
+    dot.className = i < n ? 'dot done' : i === n ? 'dot active' : 'dot';
+  }
+  currentStep = n;
+}
+
+function nextStep(from) {
+  if (from === 1) {
+    const pw = document.getElementById('password').value;
+    const pw2 = document.getElementById('password2').value;
+    const err = document.getElementById('pwError');
+    if (pw.length < 4) { err.textContent = 'Password must be at least 4 characters'; err.style.display = 'block'; return; }
+    if (pw !== pw2) { err.textContent = 'Passwords do not match'; err.style.display = 'block'; return; }
+    err.style.display = 'none';
+    showStep(2);
+  } else if (from === 2) {
+    const err = document.getElementById('engineError');
+    if ((engineType === 'openai' || engineType === 'both') && !document.getElementById('baseUrl').value) {
+      err.textContent = 'API Base URL is required'; err.style.display = 'block'; return;
+    }
+    err.style.display = 'none';
+    // Build summary
+    let html = '<b>Password:</b> ••••••••<br>';
+    html += '<b>Engines:</b><br>';
+    if (engineType === 'claude-sdk' || engineType === 'both') html += '&nbsp;&nbsp;• Claude (Agent SDK)<br>';
+    if (engineType === 'openai' || engineType === 'both') {
+      const label = document.getElementById('engineLabel').value || 'API Engine';
+      html += '&nbsp;&nbsp;• ' + label + '<br>';
+    }
+    document.getElementById('summary').innerHTML = html;
+    showStep(3);
+  }
+}
+
+function prevStep(from) { showStep(from - 1); }
+
+async function doSetup() {
+  const btn = document.getElementById('createBtn');
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+  const err = document.getElementById('setupError');
+
+  const payload = {
+    password: document.getElementById('password').value,
+    engine_type: engineType,
+  };
+  if (engineType === 'openai' || engineType === 'both') {
+    payload.base_url = document.getElementById('baseUrl').value;
+    payload.api_key = document.getElementById('apiKey').value;
+    payload.model = document.getElementById('model').value;
+    payload.engine_label = document.getElementById('engineLabel').value || 'LLM';
+    payload.engine_id = (document.getElementById('engineLabel').value || 'llm').toLowerCase().replace(/[^a-z0-9]/g, '-');
+  }
+
+  try {
+    const res = await fetch('/api/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Setup failed');
+    showStep(4);
+    setTimeout(() => { window.location.href = '/login.html'; }, 2000);
+  } catch (e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Create & Start';
+  }
+}
+
+// If already configured, redirect to login
+fetch('/api/ping').then(r => {
+  if (r.ok) window.location.href = '/';
+}).catch(() => {});
+</script>
+</body>
+</html>

@@ -6,7 +6,7 @@ import { dirname, join } from "path";
 import { readFileSync, existsSync, statSync, readdirSync } from "fs";
 import { homedir } from "os";
 
-import { loadConfig, getEngineById, getEngines, getEngineFullConfig, saveEngines, mergeEngineUpdate } from "./lib/config.mjs";
+import { loadConfig, getEngineById, getEngines, getEngineFullConfig, saveEngines, mergeEngineUpdate, needsSetup, createInitialConfig } from "./lib/config.mjs";
 import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
 import { createAuth } from "./lib/auth.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
@@ -189,8 +189,72 @@ const server = http.createServer(async (req, res) => {
   const path = extractPath(req.url);
   const method = req.method;
 
+  // ── Setup mode: redirect to wizard if not configured ──
+  if (needsSetup()) {
+    if (path === "/setup.html" || path === "/api/setup") {
+      // Allow setup page and API through
+    } else if (path.startsWith("/api/")) {
+      json(res, { error: "not configured", setup: true }, 503);
+      return;
+    } else if (path !== "/vendor/highlight.min.css" && path !== "/vendor/highlight.min.js" && path !== "/vendor/marked.min.js") {
+      res.writeHead(302, { Location: "/setup.html" });
+      res.end();
+      return;
+    }
+  }
+
+  // Setup API (no auth required)
+  if (method === "POST" && path === "/api/setup") {
+    const body = await readBody(req);
+    if (!body?.password || body.password.length < 4) {
+      json(res, { error: "Password must be at least 4 characters" }, 400);
+      return;
+    }
+    try {
+      const engines = [];
+      if (body.engine_type === "claude-sdk") {
+        engines.push({ id: "claude", type: "claude-sdk", label: "Claude", icon: "C" });
+      }
+      if (body.engine_type === "openai" && body.api_key && body.base_url) {
+        engines.push({
+          id: body.engine_id || "llm",
+          type: "openai",
+          label: body.engine_label || "LLM",
+          icon: body.engine_icon || "A",
+          provider: {
+            baseUrl: body.base_url,
+            apiKey: body.api_key,
+            model: body.model || "",
+          },
+        });
+      }
+      if (body.engine_type === "both" || (!body.engine_type && body.api_key)) {
+        engines.push({ id: "claude", type: "claude-sdk", label: "Claude", icon: "C" });
+        if (body.api_key && body.base_url) {
+          engines.push({
+            id: body.engine_id || "llm",
+            type: "openai",
+            label: body.engine_label || "LLM",
+            icon: body.engine_icon || "A",
+            provider: { baseUrl: body.base_url, apiKey: body.api_key, model: body.model || "" },
+          });
+        }
+      }
+      if (engines.length === 0) {
+        engines.push({ id: "claude", type: "claude-sdk", label: "Claude", icon: "C" });
+      }
+      createInitialConfig({ password: body.password, engines });
+      // Reinitialize auth with new password
+      Object.assign(auth, createAuth(body.password));
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
   // Auth check (returns false and sends response if not authed)
-  if (!auth.requireAuth(req, res)) return;
+  if (!needsSetup() && !auth.requireAuth(req, res)) return;
 
   // ── Auth routes ──
 
