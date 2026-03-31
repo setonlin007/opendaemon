@@ -24,6 +24,8 @@ LOGS_FILE = os.path.join(DATA_DIR, "cron_agent_logs.json")
 
 _scheduler_started = False
 _scheduler_lock = threading.Lock()
+_file_lock = threading.Lock()  # Protects JSON file read/write
+_running_tasks = set()  # In-memory set of currently running task IDs
 
 # Server base URL — MCP server runs on the same host as OpenDaemon
 _BASE_URL = os.environ.get("OPENDAEMON_BASE_URL", "http://127.0.0.1:3456")
@@ -81,20 +83,22 @@ CRON_AGENT_TASK_TOOL = Tool(
 # ── Persistence ──
 
 def _load_tasks() -> list[dict]:
-    try:
-        with open(TASKS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+    with _file_lock:
+        try:
+            with open(TASKS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return []
 
 
 def _save_tasks(tasks: list[dict]):
-    try:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        with open(TASKS_FILE, "w", encoding="utf-8") as f:
-            json.dump(tasks, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error(f"[cron-agent] save tasks error: {e}")
+    with _file_lock:
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(TASKS_FILE, "w", encoding="utf-8") as f:
+                json.dump(tasks, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"[cron-agent] save tasks error: {e}")
 
 
 def _load_logs() -> list[dict]:
@@ -387,34 +391,34 @@ def _start_agent_scheduler(channels: dict):
 
 def _tick(channels: dict):
     tasks = _load_tasks()
-    changed = False
-    to_remove = []
 
     for task in tasks:
+        tid = task.get("id", "")
         if task.get("paused"):
             continue
-        if task.get("running"):
+        # Use in-memory set as primary guard (survives file race conditions)
+        if tid in _running_tasks:
             continue
         sched = task.get("schedule_parsed")
         if not sched:
             continue
         if _should_fire(sched, task.get("last_fire")):
-            task["running"] = True
-            _save_tasks(tasks)
+            # Mark as running in memory FIRST (atomic, no race)
+            _running_tasks.add(tid)
+            logger.info(f"[cron-agent] firing task {tid}")
 
             # Execute in a separate thread to avoid blocking scheduler
             def _run(t=task):
                 try:
                     _execute_agent(t, channels)
                 finally:
-                    # Update task state after execution
                     try:
+                        # Atomically update task state in file
                         current_tasks = _load_tasks()
                         for ct in current_tasks:
                             if ct["id"] == t["id"]:
                                 ct["last_fire"] = time_mod.time()
                                 ct["fire_count"] = ct.get("fire_count", 0) + 1
-                                ct["running"] = False
                                 if t.get("once"):
                                     current_tasks = [x for x in current_tasks if x["id"] != t["id"]]
                                     logger.info(f"[cron-agent] one-shot task {t['id']} auto-deleted")
@@ -422,28 +426,36 @@ def _tick(channels: dict):
                         _save_tasks(current_tasks)
                     except Exception as e:
                         logger.error(f"[cron-agent] post-run update error: {e}")
+                    finally:
+                        # Release in-memory lock AFTER file is updated
+                        _running_tasks.discard(t["id"])
 
             runner = threading.Thread(target=_run, daemon=True,
-                                     name=f"cron-agent-{task['id']}")
+                                     name=f"cron-agent-{tid}")
             runner.start()
-            changed = True
-
-    if changed:
-        _save_tasks(tasks)
 
 
 # ── Restore on startup ──
 
 def restore_cron_agent_tasks(channels: dict):
-    """Restore agent tasks and start scheduler on MCP server startup."""
+    """Restore agent tasks and start scheduler on MCP server startup.
+
+    Tasks that were running during shutdown are NOT re-triggered automatically.
+    They are marked as interrupted and logged. The in-memory _running_tasks set
+    starts empty, so only _should_fire logic decides if a task runs again.
+    """
     try:
         tasks = _load_tasks()
-        # Clear any stale running flags from unclean shutdown
         changed = False
         for t in tasks:
             if t.get("running"):
+                # Task was interrupted by shutdown — log it, don't re-trigger
                 t["running"] = False
                 changed = True
+                _add_log(t["id"], t.get("name", ""), "", "interrupted",
+                         0, "Task was interrupted by server restart")
+                logger.warning(f"[cron-agent] task {t['id']} was interrupted by restart")
+
         if changed:
             _save_tasks(tasks)
 
