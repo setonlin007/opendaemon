@@ -4145,67 +4145,67 @@ async function rejectInsight(id) {
 async function loadStatsTab(body) {
   const stats = await api('GET', '/api/evolution/stats');
   const state = await api('GET', '/api/evolution/status');
-  const lastReflect = state.last_reflection_at ? new Date(state.last_reflection_at).toLocaleString() : 'Never';
+  const lastReflect = state.last_reflection_at ? new Date(state.last_reflection_at).toLocaleString() : t('never');
 
   body.innerHTML = `
     <div class="evo-section">
-      <h3>Evolution Stats</h3>
+      <h3>${t('evolutionStats')}</h3>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value">${((stats.tokens.chat_input + stats.tokens.chat_output) / 1000).toFixed(1)}k</div>
-          <div class="stat-label">Chat Tokens</div>
+          <div class="stat-label">${t('chatTokens')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${(stats.tokens.reflection / 1000).toFixed(1)}k</div>
-          <div class="stat-label">Reflection Tokens</div>
+          <div class="stat-label">${t('reflectionTokens')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">$${stats.cost.total.toFixed(3)}</div>
-          <div class="stat-label">Total Cost</div>
+          <div class="stat-label">${t('totalCost')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${stats.feedback.good}/${stats.feedback.good + stats.feedback.bad || 0}</div>
-          <div class="stat-label">Positive Feedback</div>
+          <div class="stat-label">${t('positiveFeedback')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${stats.knowledge.total}</div>
-          <div class="stat-label">Knowledge Entries</div>
+          <div class="stat-label">${t('knowledgeEntries')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${stats.reflections.total}</div>
-          <div class="stat-label">Reflections Run</div>
+          <div class="stat-label">${t('reflectionsRun')}</div>
         </div>
       </div>
     </div>
     <div class="evo-section" style="margin-top:16px;">
-      <h3>Injection Effectiveness</h3>
+      <h3>${t('injectionEffectiveness')}</h3>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-value">${stats.injection.conversations_with}</div>
-          <div class="stat-label">Chats w/ Injection</div>
+          <div class="stat-label">${t('chatsWithInjection')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${stats.injection.feedback_with.good}👍 ${stats.injection.feedback_with.bad}👎</div>
-          <div class="stat-label">Feedback (w/ Injection)</div>
+          <div class="stat-label">${t('feedbackWithInjection')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${stats.injection.conversations_without}</div>
-          <div class="stat-label">Chats w/o Injection</div>
+          <div class="stat-label">${t('chatsWithoutInjection')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${stats.injection.feedback_without.good}👍 ${stats.injection.feedback_without.bad}👎</div>
-          <div class="stat-label">Feedback (w/o Injection)</div>
+          <div class="stat-label">${t('feedbackWithoutInjection')}</div>
         </div>
       </div>
     </div>
     <div class="evo-section" style="margin-top:16px;">
-      <h3>Status</h3>
+      <h3>${t('statusTitle')}</h3>
       <div style="font-size:13px;color:var(--text-2);line-height:1.8;">
-        Strategy: <strong>${esc(state.strategy)}</strong><br>
-        Last reflection: <strong>${lastReflect}</strong><br>
-        Conversations since last: <strong>${state.conv_since_last}</strong><br>
-        Bad feedbacks since last: <strong>${state.bad_feedback_since_last}</strong><br>
-        Pending insights: <strong>${state.pending_insights_count}</strong>
+        ${t('strategy')}: <strong>${esc(state.strategy)}</strong><br>
+        ${t('lastReflection')}: <strong>${lastReflect}</strong><br>
+        ${t('convsSinceLast')}: <strong>${state.conv_since_last}</strong><br>
+        ${t('badFeedbackSinceLast')}: <strong>${state.bad_feedback_since_last}</strong><br>
+        ${t('pendingInsightsCount')}: <strong>${state.pending_insights_count}</strong>
       </div>
     </div>`;
 }
@@ -4215,11 +4215,11 @@ async function loadAgentsTab(body) {
   try {
     const config = await api('GET', '/api/orchestrator/config');
     let html = `<div class="evo-section">
-      <h3>Sub-Agent Orchestration</h3>
+      <h3>${t('subAgentOrchestration')}</h3>
       <div style="font-size:13px;color:var(--text-2);margin-bottom:12px;">
-        Dispatch mode: <strong>${esc(config.dispatch_mode)}</strong> |
-        Max parallel: <strong>${config.max_parallel||3}</strong> |
-        Agent types: <strong>${(config.agent_types||[]).join(', ')}</strong>
+        ${t('dispatchMode')}: <strong>${esc(config.dispatch_mode)}</strong> |
+        ${t('maxParallel')}: <strong>${config.max_parallel||3}</strong> |
+        ${t('agentTypes')}: <strong>${(config.agent_types||[]).join(', ')}</strong>
       </div>
       <div style="font-size:12px;color:var(--text-3);margin-bottom:16px;">
         💡 Set <code>sub_agents.dispatch_mode</code> to "auto" or "explicit" in config.json to enable.
@@ -4232,7 +4232,7 @@ async function loadAgentsTab(body) {
       try {
         const runs = await api('GET', `/api/sub-agents?conv_id=${currentConvId}`);
         if (runs.length > 0) {
-          html += `<div class="evo-section"><h3>Recent Runs (this conversation)</h3>`;
+          html += `<div class="evo-section"><h3>${t('recentRuns')}</h3>`;
           for (const run of runs) {
             const icons = { researcher:'🔍', analyst:'📊', coder:'💻', reviewer:'🔎' };
             const dur = run.duration_ms ? `${(run.duration_ms/1000).toFixed(1)}s` : '—';
@@ -4247,11 +4247,11 @@ async function loadAgentsTab(body) {
           }
           html += `</div>`;
         } else {
-          html += `<div class="p4-empty">No sub-agent runs in this conversation yet.</div>`;
+          html += `<div class="p4-empty">${t('noSubAgentRuns')}</div>`;
         }
-      } catch { html += `<div class="p4-empty">Select a conversation to see sub-agent runs.</div>`; }
+      } catch { html += `<div class="p4-empty">${t('selectConvForAgents')}</div>`; }
     } else {
-      html += `<div class="p4-empty">Select a conversation to see sub-agent runs.</div>`;
+      html += `<div class="p4-empty">${t('selectConvForAgents')}</div>`;
     }
 
     // Evaluator section
@@ -4259,21 +4259,21 @@ async function loadAgentsTab(body) {
       const evalStats = await api('GET', '/api/evaluations/stats');
       html += `<div class="evo-section" style="margin-top:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <h3>Knowledge Evaluator</h3>
-          <button class="p4-btn primary" onclick="runNextEval(this)">▶ Run Next Evaluation</button>
+          <h3>${t('knowledgeEvaluator')}</h3>
+          <button class="p4-btn primary" onclick="runNextEval(this)">${t('runNextEvaluation')}</button>
         </div>
         <div class="stats-grid">
-          <div class="stat-card"><div class="stat-value">${evalStats.total||0}</div><div class="stat-label">Total Evaluations</div></div>
-          <div class="stat-card"><div class="stat-value">${evalStats.passed||0}</div><div class="stat-label">Passed ✅</div></div>
-          <div class="stat-card"><div class="stat-value">${evalStats.failed||0}</div><div class="stat-label">Flagged ⚠️</div></div>
-          <div class="stat-card"><div class="stat-value">${evalStats.pending||0}</div><div class="stat-label">Pending</div></div>
-          <div class="stat-card"><div class="stat-value">${evalStats.avg_delta != null ? evalStats.avg_delta.toFixed(2) : '—'}</div><div class="stat-label">Avg Delta</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.total||0}</div><div class="stat-label">${t('totalEvaluations')}</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.passed||0}</div><div class="stat-label">${t('passed')}</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.failed||0}</div><div class="stat-label">${t('flagged')}</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.pending||0}</div><div class="stat-label">${t('pending')}</div></div>
+          <div class="stat-card"><div class="stat-value">${evalStats.avg_delta != null ? evalStats.avg_delta.toFixed(2) : '—'}</div><div class="stat-label">${t('avgDelta')}</div></div>
         </div>
       </div>`;
 
       const evals = await api('GET', '/api/evaluations?limit=10');
       if (evals.length > 0) {
-        html += `<div class="evo-section" style="margin-top:12px;"><h3>Recent Evaluations</h3>`;
+        html += `<div class="evo-section" style="margin-top:12px;"><h3>${t('recentEvaluations')}</h3>`;
         for (const ev of evals) {
           const delta = ev.score_delta != null ? (ev.score_delta > 0 ? `+${ev.score_delta.toFixed(2)}` : ev.score_delta.toFixed(2)) : '—';
           const swo = ev.scores_without != null ? JSON.stringify(ev.scores_without) : '—';
@@ -4285,10 +4285,10 @@ async function loadAgentsTab(body) {
             </div>
             <div class="p4-card-meta">Delta: ${delta} | ${ev.judge_reasoning ? esc(ev.judge_reasoning.substring(0,100)) + '…' : ''}</div>
             <div class="eval-details" style="display:none;margin-top:8px;padding:8px;background:var(--code-bg);border-radius:6px;font-size:12px;line-height:1.5;">
-              <div><strong>Scores without:</strong> ${esc(swo)}</div>
-              <div><strong>Scores with:</strong> ${esc(sw)}</div>
-              <div><strong>Score delta:</strong> ${delta}</div>
-              <div style="margin-top:4px;"><strong>Judge reasoning:</strong></div>
+              <div><strong>${t('scoresWithout')}:</strong> ${esc(swo)}</div>
+              <div><strong>${t('scoresWith')}:</strong> ${esc(sw)}</div>
+              <div><strong>${t('scoreDelta')}:</strong> ${delta}</div>
+              <div style="margin-top:4px;"><strong>${t('judgeReasoning')}:</strong></div>
               <div style="white-space:pre-wrap;color:var(--text-2);">${esc(ev.judge_reasoning || '(none)')}</div>
             </div>
           </div>`;
@@ -4317,18 +4317,18 @@ async function loadExperimentsTab(body) {
     html += `<div id="createExpForm" style="display:none;margin-bottom:16px;">
       <div class="p4-card">
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <input id="expName" placeholder="Experiment name" style="padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
+          <input id="expName" placeholder="${t('experimentName')}" style="padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
           <select id="expSurface" style="padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
-            <option value="system_prompt">System Prompt</option>
-            <option value="injection_template">Injection Template</option>
-            <option value="reflection_prompt">Reflection Prompt</option>
+            <option value="system_prompt">${t('systemPrompt')}</option>
+            <option value="injection_template">${t('injectionTemplate')}</option>
+            <option value="reflection_prompt">${t('reflectionPrompt')}</option>
           </select>
           <div class="p4-grid">
-            <div><label style="font-size:12px;color:var(--text-3);">Variant A</label><textarea id="expVarA" rows="4" style="width:100%;margin-top:4px;padding:8px;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical;"></textarea></div>
-            <div><label style="font-size:12px;color:var(--text-3);">Variant B</label><textarea id="expVarB" rows="4" style="width:100%;margin-top:4px;padding:8px;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical;"></textarea></div>
+            <div><label style="font-size:12px;color:var(--text-3);">${t('variantA')}</label><textarea id="expVarA" rows="4" style="width:100%;margin-top:4px;padding:8px;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical;"></textarea></div>
+            <div><label style="font-size:12px;color:var(--text-3);">${t('variantB')}</label><textarea id="expVarB" rows="4" style="width:100%;margin-top:4px;padding:8px;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:monospace;resize:vertical;"></textarea></div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <label style="font-size:12px;color:var(--text-3);">Min conversations:</label>
+            <label style="font-size:12px;color:var(--text-3);">${t('minConvLabel')}</label>
             <input id="expMinConvs" type="number" value="20" min="4" style="width:60px;padding:6px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
             <button class="p4-btn primary" onclick="submitCreateExperiment()">${t('create')}</button>
             <button class="p4-btn" onclick="document.getElementById('createExpForm').style.display='none'">${t('cancel')}</button>
@@ -4351,14 +4351,14 @@ async function loadExperimentsTab(body) {
             <span class="p4-card-title">${esc(exp.name)}</span>
             <span class="p4-status ${exp.status}">${esc(exp.status)}${exp.winner ? ` → ${exp.winner}` : ''}</span>
           </div>
-          <div class="p4-card-meta">Surface: ${esc(exp.surface)} | Min: ${exp.min_conversations} convs</div>
+          <div class="p4-card-meta">${t('surface')}: ${esc(exp.surface)} | Min: ${exp.min_conversations} ${t('convs')}</div>
           <div class="p4-grid" style="margin-top:8px;">
             <div style="font-size:12px;">
-              <strong>Variant A</strong> — ${exp.conversations_a||0} convs | 👍${fbA.good} 👎${fbA.bad} (${ratioA}%)
+              <strong>${t('variantA')}</strong> — ${exp.conversations_a||0} ${t('convs')} | 👍${fbA.good} 👎${fbA.bad} (${ratioA}%)
               <div class="p4-variant">${esc((exp.variant_a||'').substring(0,200))}</div>
             </div>
             <div style="font-size:12px;">
-              <strong>Variant B</strong> — ${exp.conversations_b||0} convs | 👍${fbB.good} 👎${fbB.bad} (${ratioB}%)
+              <strong>${t('variantB')}</strong> — ${exp.conversations_b||0} ${t('convs')} | 👍${fbB.good} 👎${fbB.bad} (${ratioB}%)
               <div class="p4-variant">${esc((exp.variant_b||'').substring(0,200))}</div>
             </div>
           </div>
@@ -4618,13 +4618,13 @@ function showEngineForm(existing) {
       ${!isEdit ? `<div class="eng-type-selector">
         <div class="eng-type-card${category === 'agentic' ? ' selected' : ''}" onclick="selectEngineType('agentic')">
           <div class="eng-type-icon">🤖</div>
-          <div class="eng-type-name">Agentic</div>
-          <div class="eng-type-desc">Built-in Agent capabilities</div>
+          <div class="eng-type-name">${t('agentic')}</div>
+          <div class="eng-type-desc">${t('agenticDesc')}</div>
         </div>
         <div class="eng-type-card${category === 'api' ? ' selected' : ''}" onclick="selectEngineType('api')">
           <div class="eng-type-icon">🔌</div>
-          <div class="eng-type-name">API</div>
-          <div class="eng-type-desc">OpenDaemon provides Agent capabilities</div>
+          <div class="eng-type-name">${t('api')}</div>
+          <div class="eng-type-desc">${t('apiDesc')}</div>
         </div>
       </div>
       <div id="engPresets"></div>` : ''}
@@ -4656,12 +4656,12 @@ async function selectEngineType(category) {
       const data = await api('GET', '/api/engine-types');
       const agenticTypes = (data.types || []).filter(t => t.category === 'agentic');
       if (agenticTypes.length === 0) {
-        $('engFields').innerHTML = '<div style="color:var(--text-3);font-size:13px;padding:12px 0">No Agentic engine plugins installed.<br>Install a plugin in <code>plugins/engine-{name}/</code> and restart.</div>';
+        $('engFields').innerHTML = `<div style="color:var(--text-3);font-size:13px;padding:12px 0">${t('noAgenticPlugins')}<br>${t('installPlugin')} <code>plugins/engine-{name}/</code> ${t('andRestart')}</div>`;
         return;
       }
       // Show SDK selector
       $('engFields').innerHTML = `
-        <div class="eng-field"><label>Select SDK</label>
+        <div class="eng-field"><label>${t('selectSdk')}</label>
           <div class="eng-presets" style="margin-top:4px">
             ${agenticTypes.map(t => `<span class="eng-preset-chip" onclick="selectAgenticSDK('${esc(t.type)}')" style="padding:8px 16px">${esc(t.name)}</span>`).join('')}
           </div>
@@ -4717,24 +4717,24 @@ function buildEngineFields(e) {
   if (isApi) {
     return `
       <div class="eng-field-row">
-        <div class="eng-field"><label>Name</label><input id="engLabel" value="${esc(e.label || '')}"></div>
-        <div class="eng-field" style="max-width:60px"><label>Icon</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
+        <div class="eng-field"><label>${t('name')}</label><input id="engLabel" value="${esc(e.label || '')}"></div>
+        <div class="eng-field" style="max-width:60px"><label>${t('icon')}</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
       </div>
-      <div class="eng-field"><label>Base URL</label><input id="engBaseUrl" value="${esc(e.provider?.baseUrl || '')}" placeholder="https://api.openai.com/v1"></div>
-      <div class="eng-field"><label>API Key</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-..."></div>
-      <div class="eng-field"><label>Model</label><input id="engModel" value="${esc(e.provider?.model || '')}" placeholder="gpt-4o"></div>
+      <div class="eng-field"><label>${t('baseUrl')}</label><input id="engBaseUrl" value="${esc(e.provider?.baseUrl || '')}" placeholder="https://api.openai.com/v1"></div>
+      <div class="eng-field"><label>${t('apiKey')}</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-..."></div>
+      <div class="eng-field"><label>${t('model')}</label><input id="engModel" value="${esc(e.provider?.model || '')}" placeholder="gpt-4o"></div>
       <input type="hidden" id="engType" value="openai">
     `;
   } else if (e.type === 'openai-agents') {
     // OpenAI Agents SDK — always needs API Key + URL
     return `
       <div class="eng-field-row">
-        <div class="eng-field"><label>Name</label><input id="engLabel" value="${esc(e.label || '')}"></div>
-        <div class="eng-field" style="max-width:60px"><label>Icon</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
+        <div class="eng-field"><label>${t('name')}</label><input id="engLabel" value="${esc(e.label || '')}"></div>
+        <div class="eng-field" style="max-width:60px"><label>${t('icon')}</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
       </div>
-      <div class="eng-field"><label>Base URL (optional, defaults to OpenAI)</label><input id="engBaseUrl" value="${esc(e.provider?.baseUrl || '')}" placeholder="https://api.openai.com/v1"></div>
-      <div class="eng-field"><label>API Key</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-..."></div>
-      <div class="eng-field"><label>Model</label><input id="engModel" value="${esc(e.provider?.model || e.model || '')}" placeholder="gpt-4.1"></div>
+      <div class="eng-field"><label>${t('baseUrl')} (${t('optional')})</label><input id="engBaseUrl" value="${esc(e.provider?.baseUrl || '')}" placeholder="https://api.openai.com/v1"></div>
+      <div class="eng-field"><label>${t('apiKey')}</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-..."></div>
+      <div class="eng-field"><label>${t('model')}</label><input id="engModel" value="${esc(e.provider?.model || e.model || '')}" placeholder="gpt-4.1"></div>
       <input type="hidden" id="engType" value="openai-agents">
     `;
   } else {
@@ -4742,14 +4742,14 @@ function buildEngineFields(e) {
     const authMode = e.provider?.baseUrl ? 'custom' : (e.provider?.apiKey ? 'apikey' : 'oauth');
     return `
       <div class="eng-field-row">
-        <div class="eng-field"><label>Name</label><input id="engLabel" value="${esc(e.label || '')}"></div>
-        <div class="eng-field" style="max-width:60px"><label>Icon</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
+        <div class="eng-field"><label>${t('name')}</label><input id="engLabel" value="${esc(e.label || '')}"></div>
+        <div class="eng-field" style="max-width:60px"><label>${t('icon')}</label><input id="engIcon" value="${esc(e.icon || '')}" maxlength="2"></div>
       </div>
-      <div class="eng-field"><label>Auth Mode</label>
+      <div class="eng-field"><label>${t('authMode')}</label>
         <select id="engAuthMode" onchange="onAuthModeChange()">
-          <option value="oauth"${authMode === 'oauth' ? ' selected' : ''}>OAuth (already logged in, zero config)</option>
-          <option value="apikey"${authMode === 'apikey' ? ' selected' : ''}>API Key (Anthropic direct)</option>
-          <option value="custom"${authMode === 'custom' ? ' selected' : ''}>Custom URL + Key (OpenRouter, etc.)</option>
+          <option value="oauth"${authMode === 'oauth' ? ' selected' : ''}>${t('oauthOption')}</option>
+          <option value="apikey"${authMode === 'apikey' ? ' selected' : ''}>${t('apikeyOption')}</option>
+          <option value="custom"${authMode === 'custom' ? ' selected' : ''}>${t('customOption')}</option>
         </select>
       </div>
       <div id="engAuthFields">${buildAgenticAuthFields(authMode, e)}</div>
@@ -4763,18 +4763,18 @@ function buildAgenticAuthFields(mode, e = {}) {
   const effort = e.options?.effort || '';
   const budget = e.options?.maxBudgetUsd || '';
   const modelSelect = `
-    <div class="eng-field"><label>Model</label>
+    <div class="eng-field"><label>${t('model')}</label>
       <select id="engModel">
-        <option value="">Default</option>
+        <option value="">${t('default')}</option>
         <option value="claude-opus-4-6"${model === 'claude-opus-4-6' ? ' selected' : ''}>Claude Opus 4</option>
         <option value="claude-sonnet-4-5-20250929"${model === 'claude-sonnet-4-5-20250929' ? ' selected' : ''}>Claude Sonnet 4.5</option>
         <option value="claude-haiku-3-5-20241022"${model === 'claude-haiku-3-5-20241022' ? ' selected' : ''}>Claude Haiku 3.5</option>
       </select>
     </div>`;
   const effortSelect = `
-    <div class="eng-field"><label>Effort</label>
+    <div class="eng-field"><label>${t('effort')}</label>
       <select id="engEffort">
-        <option value=""${!effort ? ' selected' : ''}>Default (high)</option>
+        <option value=""${!effort ? ' selected' : ''}>${t('default')} (high)</option>
         <option value="low"${effort === 'low' ? ' selected' : ''}>Low</option>
         <option value="medium"${effort === 'medium' ? ' selected' : ''}>Medium</option>
         <option value="high"${effort === 'high' ? ' selected' : ''}>High</option>
@@ -4784,30 +4784,30 @@ function buildAgenticAuthFields(mode, e = {}) {
 
   if (mode === 'oauth') {
     return `
-      <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">Using local OAuth credentials from <code>claude login</code></div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">${t('usingOauth')} <code>claude login</code></div>
       <div class="eng-field-row">${modelSelect}${effortSelect}</div>`;
   }
   if (mode === 'apikey') {
     return `
-      <div class="eng-field"><label>API Key</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-ant-..."></div>
+      <div class="eng-field"><label>${t('apiKey')}</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-ant-..."></div>
       <div class="eng-field-row">${modelSelect}${effortSelect}</div>
-      <div class="eng-field"><label>Budget Limit (USD per conversation, optional)</label><input id="engBudget" type="number" step="0.5" value="${budget}" placeholder="e.g. 5"></div>`;
+      <div class="eng-field"><label>${t('budgetLimit')}</label><input id="engBudget" type="number" step="0.5" value="${budget}" placeholder="e.g. 5"></div>`;
   }
   // custom
   return `
-    <div class="eng-field"><label>Base URL</label><input id="engBaseUrl" value="${esc(e.provider?.baseUrl || '')}" placeholder="https://openrouter.ai/api/v1"></div>
-    <div class="eng-field"><label>API Key</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-or-..."></div>
+    <div class="eng-field"><label>${t('baseUrl')}</label><input id="engBaseUrl" value="${esc(e.provider?.baseUrl || '')}" placeholder="https://openrouter.ai/api/v1"></div>
+    <div class="eng-field"><label>${t('apiKey')}</label><input id="engApiKey" type="password" value="${esc(e.provider?.apiKey || '')}" placeholder="sk-or-..."></div>
     <div class="eng-field-row">
-      <div class="eng-field"><label>Model</label><input id="engModel" value="${esc(e.provider?.model || model || '')}" placeholder="anthropic/claude-sonnet-4"></div>
-      <div class="eng-field"><label>Format</label>
+      <div class="eng-field"><label>${t('model')}</label><input id="engModel" value="${esc(e.provider?.model || model || '')}" placeholder="anthropic/claude-sonnet-4"></div>
+      <div class="eng-field"><label>${t('format')}</label>
         <select id="engFormat">
-          <option value="openai"${(e.provider?.format || 'openai') === 'openai' ? ' selected' : ''}>OpenAI Compatible</option>
-          <option value="anthropic"${e.provider?.format === 'anthropic' ? ' selected' : ''}>Anthropic Compatible</option>
+          <option value="openai"${(e.provider?.format || 'openai') === 'openai' ? ' selected' : ''}>${t('openaiCompatible')}</option>
+          <option value="anthropic"${e.provider?.format === 'anthropic' ? ' selected' : ''}>${t('anthropicCompatible')}</option>
         </select>
       </div>
     </div>
     <div class="eng-field-row">${effortSelect}
-      <div class="eng-field"><label>Budget Limit</label><input id="engBudget" type="number" step="0.5" value="${budget}" placeholder="e.g. 5"></div>
+      <div class="eng-field"><label>${t('budgetLimit')}</label><input id="engBudget" type="number" step="0.5" value="${budget}" placeholder="e.g. 5"></div>
     </div>`;
 }
 
