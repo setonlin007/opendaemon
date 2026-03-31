@@ -84,9 +84,11 @@ async def main():
 
     # Restore persistent state (reminders, cron tasks)
     from tools.reminder import restore_reminders
-    from tools.cron_task import restore_cron_tasks
+    from tools.cron_notify_task import restore_cron_notify_tasks
+    from tools.cron_agent_task import restore_cron_agent_tasks
     restore_reminders(_channels)
-    restore_cron_tasks(_channels)
+    restore_cron_notify_tasks(_channels)
+    restore_cron_agent_tasks(_channels)
 
     logger.info("OpenDaemon MCP Server starting (stdio)")
     async with stdio_server() as (read_stream, write_stream):

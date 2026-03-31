@@ -1,4 +1,4 @@
-"""Cron task tool — periodic scheduled tasks with persistence."""
+"""Cron notify task — periodic scheduled notifications with persistence."""
 
 import json
 import logging
@@ -18,9 +18,9 @@ TASKS_FILE = os.path.join(DATA_DIR, "cron_tasks.json")
 _scheduler_started = False
 _scheduler_lock = threading.Lock()
 
-CRON_TASK_TOOL = Tool(
-    name="cron_task",
-    description="Create, list, delete, pause, or resume periodic tasks. Tasks fire on schedule and send messages through configured channels.",
+CRON_NOTIFY_TASK_TOOL = Tool(
+    name="cron_notify_task",
+    description="Schedule periodic notifications/messages through channels (Bark, Feishu, WeChat). Only for sending reminders or alerts — NOT for executing code, agent tasks, or file operations. Use cron_agent_task instead for those.",
     inputSchema={
         "type": "object",
         "properties": {
@@ -262,7 +262,7 @@ def _fire_task(channels: dict, task: dict):
 
 # ── Restore on startup ──
 
-def restore_cron_tasks(channels: dict):
+def restore_cron_notify_tasks(channels: dict):
     tasks = _load_tasks()
     _start_scheduler(channels)
     active = sum(1 for t in tasks if not t.get("paused"))
@@ -272,7 +272,7 @@ def restore_cron_tasks(channels: dict):
 
 # ── Handler ──
 
-async def handle_cron_task(arguments: dict, channels: dict = None, **kwargs) -> list[TextContent]:
+async def handle_cron_notify_task(arguments: dict, channels: dict = None, **kwargs) -> list[TextContent]:
     action = arguments.get("action", "list")
     channels = channels or {}
 

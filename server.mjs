@@ -1,3 +1,4 @@
+import { gzipSync } from "zlib";
 import http from "http";
 import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
@@ -75,6 +76,13 @@ async function initMCP() {
   }
   const serverConfig = mcpConfig[serverName];
   const channelsConfig = serverConfig.channels || {};
+  // Generate internal auth token for MCP → OpenDaemon API calls
+  const internalToken = auth.createInternalToken();
+  serverConfig.env = {
+    ...(serverConfig.env || {}),
+    OPENDAEMON_AUTH_TOKEN: internalToken,
+    OPENDAEMON_BASE_URL: `http://127.0.0.1:${PORT}`,
+  };
   mcpManager = new MCPManager(serverConfig, channelsConfig);
   await mcpManager.start();
 }
@@ -147,9 +155,16 @@ async function readBody(req) {
   try { return JSON.parse(body); } catch { return null; }
 }
 
-function json(res, data, status = 200) {
-  res.writeHead(status, { "Content-Type": "application/json" });
-  res.end(JSON.stringify(data));
+function json(res, data, status = 200, req = null) {
+  const body = JSON.stringify(data);
+  const ae = req?.headers?.["accept-encoding"] || "";
+  if (ae.includes("gzip") && body.length > 1024) {
+    res.writeHead(status, { "Content-Type": "application/json", "Content-Encoding": "gzip" });
+    res.end(gzipSync(Buffer.from(body)));
+  } else {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(body);
+  }
 }
 
 function sendSSE(res, event, data) {
@@ -191,6 +206,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ── Engine routes ──
+  // ── Ping (lightweight health check, ~50 bytes) ──
+
+  if (method === "GET" && path === "/api/ping") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, boot: SERVER_BOOT }));
+    return;
+  }
+
   // ── Init (combined endpoint to reduce round-trips) ──
 
   if (method === "GET" && path === "/api/init") {
@@ -202,7 +225,7 @@ const server = http.createServer(async (req, res) => {
       conversations: convs,
       latestMessages,
       server_boot: SERVER_BOOT,
-    });
+    }, 200, req);
     return;
   }
 
@@ -325,7 +348,7 @@ const server = http.createServer(async (req, res) => {
   // ── Conversation routes ──
 
   if (method === "GET" && path === "/api/conversations") {
-    json(res, listConversations());
+    json(res, listConversations(), 200, req);
     return;
   }
 
@@ -1114,11 +1137,22 @@ const server = http.createServer(async (req, res) => {
   }
 
   const ext = filePath.substring(filePath.lastIndexOf("."));
-  res.writeHead(200, {
-    "Content-Type": MIME[ext] || "application/octet-stream",
-    "Cache-Control": "no-cache, no-store, must-revalidate",
-  });
-  res.end(readFileSync(filePath));
+  const body = readFileSync(filePath);
+  const ae = req.headers["accept-encoding"] || "";
+  if (ae.includes("gzip") && [".html",".js",".css",".json"].includes(ext)) {
+    res.writeHead(200, {
+      "Content-Type": MIME[ext] || "application/octet-stream",
+      "Content-Encoding": "gzip",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+    });
+    res.end(gzipSync(body));
+  } else {
+    res.writeHead(200, {
+      "Content-Type": MIME[ext] || "application/octet-stream",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+    });
+    res.end(body);
+  }
 });
 
 // ── Engine handlers ──
