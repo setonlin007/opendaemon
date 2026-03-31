@@ -3,7 +3,7 @@
 // Usage: t('key') or t('key', { name: 'value' })
 
 const I18N = {
-  _locale: localStorage.getItem('od-lang') || (navigator.language.startsWith('zh') ? 'zh' : 'en'),
+  _locale: localStorage.getItem('od-lang') || 'en',
   _translations: {},
 
   get locale() { return this._locale; },
