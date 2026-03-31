@@ -1831,7 +1831,7 @@ return He}()
       <span class="footer-icon">🌐</span>
       <span class="footer-label lang-toggle-label">EN</span>
     </button>
-    <button class="footer-btn" onclick="window.location.href='/api/logout'">
+    <button class="footer-btn" onclick="confirmLogout()">
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </span>
@@ -3187,6 +3187,44 @@ const sidebarEl = document.querySelector('.sidebar');
 const overlayEl = $('sidebarOverlay');
 function toggleSidebar() { sidebarEl.classList.toggle('open'); overlayEl.classList.toggle('visible'); }
 function closeSidebar() { sidebarEl.classList.remove('open'); overlayEl.classList.remove('visible'); }
+
+// ── Logout with confirmation ──
+function confirmLogout() {
+  if (confirm(t('logoutConfirm'))) {
+    window.location.href = '/api/logout';
+  }
+}
+
+// ── Mobile: swipe right to close sidebar (prevent accidental button taps) ──
+{
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+
+  sidebarEl.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isSwiping = false;
+  }, { passive: true });
+
+  sidebarEl.addEventListener('touchmove', (e) => {
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    // Detect horizontal swipe (right direction, distance > 40px, not mostly vertical)
+    if (dx < -40 && dy < 60) {
+      isSwiping = true;
+    }
+  }, { passive: true });
+
+  sidebarEl.addEventListener('touchend', (e) => {
+    if (isSwiping) {
+      // Swipe left detected → close sidebar, suppress any button click
+      e.preventDefault();
+      closeSidebar();
+      isSwiping = false;
+    }
+  });
+}
 
 // ── Background/foreground detection (iOS app switch) ──
 document.addEventListener('visibilitychange', () => {

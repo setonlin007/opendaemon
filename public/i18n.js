@@ -61,6 +61,7 @@ I18N._translations = {
     'files': 'Files',
     'memory': 'Memory',
     'logout': 'Logout',
+    'logoutConfirm': 'Are you sure you want to logout?',
 
     // Context menu
     'rename': 'Rename',
@@ -299,6 +300,7 @@ I18N._translations = {
     'files': '文件',
     'memory': '记忆',
     'logout': '退出',
+    'logoutConfirm': '确定要退出登录吗？',
 
     // Context menu
     'rename': '重命名',
