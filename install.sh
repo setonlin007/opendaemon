@@ -1,0 +1,362 @@
+#!/bin/bash
+# ──────────────────────────────────────────────────────
+# OpenDaemon Installer — macOS / Linux / WSL
+# One-line install:
+#   curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install.sh | bash
+#
+# Options (env vars):
+#   PROXY_URL=http://host:port  — set HTTP/HTTPS proxy
+#   INSTALL_DIR=/custom/path    — custom install directory
+#   BRANCH=main                 — git branch to install
+# ──────────────────────────────────────────────────────
+set -e
+
+# ── Colors ──
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log()  { echo -e "${GREEN}[✓]${NC} $1"; }
+warn() { echo -e "${YELLOW}[!]${NC} $1"; }
+err()  { echo -e "${RED}[✗]${NC} $1"; exit 1; }
+info() { echo -e "${CYAN}[·]${NC} $1"; }
+
+# ── Detect platform ──
+PLATFORM="unknown"
+case "$(uname -s)" in
+  Darwin)  PLATFORM="macos" ;;
+  Linux)
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+      PLATFORM="wsl"
+    else
+      PLATFORM="linux"
+    fi
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo ""
+    err "Windows is not supported natively.
+    Please install WSL first:
+      1. Open PowerShell as Admin
+      2. Run:  wsl --install
+      3. Restart and open Ubuntu from Start menu
+      4. Re-run this script inside WSL"
+    ;;
+esac
+
+# ── Config ──
+REPO="https://github.com/setonlin007/opendaemon.git"
+BRANCH="${BRANCH:-main}"
+PROXY_URL="${PROXY_URL:-}"
+PORT=3456
+
+# Platform-specific defaults
+if [ "$PLATFORM" = "macos" ]; then
+  CURRENT_USER="$(whoami)"
+  INSTALL_DIR="${INSTALL_DIR:-$HOME/opendaemon}"
+  RUN_USER="$CURRENT_USER"
+else
+  RUN_USER="opendaemon"
+  INSTALL_DIR="${INSTALL_DIR:-/home/opendaemon/opendaemon}"
+fi
+
+echo ""
+echo -e "${BOLD}╔══════════════════════════════════════╗${NC}"
+echo -e "${BOLD}║       OpenDaemon Installer v0.6      ║${NC}"
+echo -e "${BOLD}╚══════════════════════════════════════╝${NC}"
+echo -e "  Platform: ${CYAN}${PLATFORM}${NC}"
+echo ""
+
+# ══════════════════════════════════════
+#  macOS Install
+# ══════════════════════════════════════
+install_macos() {
+  # No root needed on macOS
+  if [ "$(id -u)" -eq 0 ]; then
+    warn "No need to run as root on macOS. Proceeding..."
+  fi
+
+  # Xcode CLI tools (includes git)
+  if ! xcode-select -p &>/dev/null; then
+    info "Installing Xcode Command Line Tools..."
+    xcode-select --install 2>/dev/null || true
+    warn "Please complete the Xcode tools popup, then re-run this script."
+    exit 0
+  fi
+
+  # Homebrew
+  if ! command -v brew &>/dev/null; then
+    info "Installing Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    # Add brew to PATH for Apple Silicon
+    if [ -f /opt/homebrew/bin/brew ]; then
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    fi
+  fi
+  log "Homebrew ready"
+
+  # Node.js
+  NODE_MAJOR=$(node --version 2>/dev/null | cut -d. -f1 | tr -d 'v' || echo "0")
+  if [ "$NODE_MAJOR" -lt 20 ]; then
+    info "Installing Node.js..."
+    brew install node > /dev/null 2>&1
+  fi
+
+  # Python 3
+  if ! command -v python3 &>/dev/null; then
+    info "Installing Python 3..."
+    brew install python3 > /dev/null 2>&1
+  fi
+
+  log "Node $(node --version), Python $(python3 --version 2>&1 | awk '{print $2}')"
+
+  # Global tools
+  npm list -g pm2 > /dev/null 2>&1 || npm install -g pm2 > /dev/null 2>&1
+  npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code > /dev/null 2>&1
+  log "pm2 and claude-code installed"
+
+  # Clone
+  if [ -d "$INSTALL_DIR/.git" ]; then
+    info "Project exists, pulling latest..."
+    cd "$INSTALL_DIR"
+    git pull origin "$BRANCH" > /dev/null 2>&1
+    log "Updated to latest"
+  else
+    info "Cloning repository..."
+    mkdir -p "$(dirname "$INSTALL_DIR")"
+    git clone --depth 1 -b "$BRANCH" "$REPO" "$INSTALL_DIR" > /dev/null 2>&1
+    log "Cloned to $INSTALL_DIR"
+  fi
+
+  cd "$INSTALL_DIR"
+
+  # Dependencies
+  info "Installing Node.js dependencies..."
+  npm install --production > /dev/null 2>&1
+  log "Node.js dependencies installed"
+
+  if [ -f "mcp/requirements.txt" ]; then
+    if [ ! -d "mcp/.venv" ]; then
+      info "Creating Python venv..."
+      python3 -m venv mcp/.venv
+    fi
+    mcp/.venv/bin/pip install -q -r mcp/requirements.txt > /dev/null 2>&1
+    log "Python dependencies installed"
+  fi
+
+  # Directories & config
+  mkdir -p data mcp/data
+  generate_config
+
+  # Proxy
+  setup_proxy "$HOME"
+
+  # Start
+  info "Starting OpenDaemon..."
+  pm2 delete opendaemon 2>/dev/null || true
+  cd "$INSTALL_DIR"
+  if [ -n "$PROXY_URL" ]; then
+    HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" pm2 start server.mjs --name opendaemon > /dev/null 2>&1
+  else
+    pm2 start server.mjs --name opendaemon > /dev/null 2>&1
+  fi
+  pm2 save > /dev/null 2>&1
+  log "OpenDaemon started"
+
+  show_done "localhost"
+}
+
+# ══════════════════════════════════════
+#  Linux / WSL Install
+# ══════════════════════════════════════
+install_linux() {
+  if [ "$(id -u)" -ne 0 ]; then
+    err "Please run as root:  sudo bash install.sh"
+  fi
+
+  if [ "$PLATFORM" = "wsl" ]; then
+    log "WSL detected — installing as Linux"
+  fi
+
+  # Detect distro
+  PKG_MGR="apt"
+  if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    case "$ID" in
+      ubuntu|debian) PKG_MGR="apt" ;;
+      centos|rhel|rocky|alma|fedora) PKG_MGR="yum" ;;
+      *) warn "Unknown distro: $ID — trying apt..." ;;
+    esac
+  fi
+
+  # Create user
+  if ! id "$RUN_USER" &>/dev/null; then
+    useradd -m -s /bin/bash "$RUN_USER"
+    log "Created user: $RUN_USER"
+  else
+    log "User $RUN_USER already exists"
+  fi
+
+  # System packages
+  info "Installing system packages..."
+  if [ "$PKG_MGR" = "apt" ]; then
+    apt-get update -qq > /dev/null 2>&1
+    apt-get install -y -qq python3 python3-venv sqlite3 curl git > /dev/null 2>&1 || true
+  else
+    yum install -y -q python3 sqlite curl git > /dev/null 2>&1 || true
+  fi
+
+  # Node.js 20
+  NODE_MAJOR=$(node --version 2>/dev/null | cut -d. -f1 | tr -d 'v' || echo "0")
+  if [ "$NODE_MAJOR" -lt 20 ]; then
+    info "Installing Node.js 20..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null 2>&1
+    if [ "$PKG_MGR" = "apt" ]; then
+      apt-get install -y -qq nodejs > /dev/null 2>&1
+    else
+      yum install -y -q nodejs > /dev/null 2>&1
+    fi
+  fi
+  log "Node $(node --version), Python $(python3 --version 2>&1 | awk '{print $2}')"
+
+  # Global tools
+  npm list -g pm2 > /dev/null 2>&1 || npm install -g pm2 > /dev/null 2>&1
+  npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code > /dev/null 2>&1
+  log "pm2 and claude-code installed"
+
+  # Clone
+  if [ -d "$INSTALL_DIR/.git" ]; then
+    info "Project exists, pulling latest..."
+    cd "$INSTALL_DIR"
+    su - "$RUN_USER" -c "cd $INSTALL_DIR && git pull origin $BRANCH" > /dev/null 2>&1
+    log "Updated to latest"
+  else
+    info "Cloning repository..."
+    mkdir -p "$(dirname "$INSTALL_DIR")"
+    git clone --depth 1 -b "$BRANCH" "$REPO" "$INSTALL_DIR" > /dev/null 2>&1
+    log "Cloned to $INSTALL_DIR"
+  fi
+
+  cd "$INSTALL_DIR"
+
+  # Dependencies
+  info "Installing Node.js dependencies..."
+  npm install --production > /dev/null 2>&1
+  log "Node.js dependencies installed"
+
+  if [ -f "mcp/requirements.txt" ]; then
+    if [ ! -d "mcp/.venv" ]; then
+      info "Creating Python venv..."
+      python3 -m venv mcp/.venv
+    fi
+    mcp/.venv/bin/pip install -q -r mcp/requirements.txt > /dev/null 2>&1
+    log "Python dependencies installed"
+  fi
+
+  # Directories & config
+  mkdir -p data mcp/data
+  generate_config
+
+  # Fix ownership
+  chown -R "$RUN_USER":"$RUN_USER" /home/"$RUN_USER"
+
+  # Proxy
+  setup_proxy "/home/$RUN_USER"
+
+  # Start
+  info "Starting OpenDaemon..."
+  PM2_ENV=""
+  if [ -n "$PROXY_URL" ]; then
+    PM2_ENV="HTTP_PROXY=$PROXY_URL HTTPS_PROXY=$PROXY_URL"
+  fi
+  su - "$RUN_USER" -c "pm2 delete opendaemon 2>/dev/null; cd $INSTALL_DIR && $PM2_ENV pm2 start server.mjs --name opendaemon && pm2 save" > /dev/null 2>&1
+  log "OpenDaemon started"
+
+  # Auto-start on boot (skip on WSL — no systemd usually)
+  if [ "$PLATFORM" != "wsl" ]; then
+    env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u "$RUN_USER" --hp /home/"$RUN_USER" > /dev/null 2>&1 || true
+  fi
+
+  IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+  show_done "$IP"
+}
+
+# ══════════════════════════════════════
+#  Shared functions
+# ══════════════════════════════════════
+generate_config() {
+  if [ ! -f "config.json" ]; then
+    AUTH_PASS=$(openssl rand -hex 8 2>/dev/null || echo "changeme")
+    cat > config.json << CONF
+{
+  "auth": {
+    "password": "$AUTH_PASS"
+  },
+  "engines": {
+    "claude": {
+      "provider": "claude-code"
+    }
+  }
+}
+CONF
+    log "Generated config.json (password: $AUTH_PASS)"
+  else
+    log "config.json already exists, skipping"
+  fi
+}
+
+setup_proxy() {
+  local HOME_DIR="$1"
+  if [ -n "$PROXY_URL" ]; then
+    mkdir -p "$HOME_DIR/.claude"
+    cat > "$HOME_DIR/.claude/settings.json" << SETTINGS
+{
+  "env": {
+    "HTTP_PROXY": "$PROXY_URL",
+    "HTTPS_PROXY": "$PROXY_URL"
+  },
+  "skipDangerousModePermissionPrompt": true
+}
+SETTINGS
+    if [ "$PLATFORM" != "macos" ]; then
+      chown -R "$RUN_USER":"$RUN_USER" "$HOME_DIR/.claude"
+    fi
+    log "Proxy configured: $PROXY_URL"
+  fi
+}
+
+show_done() {
+  local IP="$1"
+  local PASS
+  PASS=$(grep -o '"password"[[:space:]]*:[[:space:]]*"[^"]*"' config.json 2>/dev/null | head -1 | sed 's/.*: *"//;s/"//' || echo "see config.json")
+
+  echo ""
+  echo -e "${BOLD}╔══════════════════════════════════════╗${NC}"
+  echo -e "${BOLD}║        Installation Complete!         ║${NC}"
+  echo -e "${BOLD}╚══════════════════════════════════════╝${NC}"
+  echo ""
+  echo -e "  ${CYAN}URL:${NC}       http://${IP}:${PORT}"
+  echo -e "  ${CYAN}Password:${NC}  ${PASS}"
+  echo -e "  ${CYAN}Project:${NC}   ${INSTALL_DIR}"
+  echo -e "  ${CYAN}Config:${NC}    ${INSTALL_DIR}/config.json"
+  echo ""
+  echo -e "  ${YELLOW}Next steps:${NC}"
+  if [ "$PLATFORM" = "macos" ]; then
+    echo -e "    1. Login Claude:  ${BOLD}claude${NC}"
+    echo -e "    2. Visit http://localhost:${PORT}"
+  else
+    echo -e "    1. Open firewall port ${PORT}"
+    echo -e "    2. Login Claude:  ${BOLD}su - ${RUN_USER} -c 'claude'${NC}"
+    echo -e "    3. Visit http://${IP}:${PORT} and login"
+  fi
+  echo ""
+}
+
+# ── Run ──
+case "$PLATFORM" in
+  macos)       install_macos ;;
+  linux|wsl)   install_linux ;;
+  *)           err "Unsupported platform: $PLATFORM" ;;
+esac
