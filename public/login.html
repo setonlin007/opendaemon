@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OpenDaemon - Login</title>
+<script src="i18n.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -56,19 +57,30 @@ body {
 .login-box button:hover { opacity: 0.9; }
 .login-box button:disabled { opacity: 0.5; cursor: not-allowed; }
 .error { color: #f87171; font-size: 13px; margin-top: 12px; display: none; }
+.lang-switch { position: fixed; top: 16px; right: 16px; background: none; border: 1px solid #2a2a4a; color: #a0a0b0; padding: 4px 12px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+.lang-switch:hover { border-color: #e94560; color: #e94560; }
 </style>
 </head>
 <body>
+<button class="lang-switch" onclick="I18N.toggleLocale();applyLang()">
+  <span class="lang-toggle-label"></span>
+</button>
 <div class="login-box">
   <h1>OpenDaemon</h1>
-  <p>The self-evolving agent harness</p>
+  <p data-i18n="tagline">The self-evolving agent harness</p>
   <form onsubmit="login(event)">
-    <input type="password" id="pw" placeholder="Password" autofocus>
-    <button type="submit" id="btn">Login</button>
+    <input type="password" id="pw" autofocus>
+    <button type="submit" id="btn" data-i18n="login">Login</button>
   </form>
   <div class="error" id="err"></div>
 </div>
 <script>
+function applyLang() {
+  I18N.translatePage();
+  document.getElementById('pw').placeholder = t('password');
+}
+applyLang();
+
 async function login(e) {
   e.preventDefault();
   const btn = document.getElementById('btn');
@@ -85,11 +97,11 @@ async function login(e) {
       window.location.href = '/';
     } else {
       const data = await res.json();
-      err.textContent = data.error || 'Login failed';
+      err.textContent = data.error || t('loginFailed');
       err.style.display = 'block';
     }
   } catch (e) {
-    err.textContent = 'Connection error';
+    err.textContent = t('connectionError');
     err.style.display = 'block';
   }
   btn.disabled = false;

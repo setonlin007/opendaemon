@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
 <title>OpenDaemon</title>
+<script src="i18n.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -1770,10 +1771,10 @@ return He}()
 <aside class="sidebar">
   <div class="sidebar-header">
     <h1 onclick="openAboutPanel()">OpenDaemon</h1>
-    <button class="sb-icon-btn" onclick="toggleSidebarSearch()" title="Search">
+    <button class="sb-icon-btn" onclick="toggleSidebarSearch()" data-i18n-title="search" title="Search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </button>
-    <button class="sb-icon-btn" onclick="openAboutPanel()" title="Docs">
+    <button class="sb-icon-btn" onclick="openAboutPanel()" data-i18n-title="docs" title="Docs">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
     </button>
   </div>
@@ -1781,7 +1782,7 @@ return He}()
     <div class="new-chat-bar">
       <button class="new-chat-btn" onclick="newChat()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        New Chat
+        <span data-i18n="newChat">New Chat</span>
       </button>
       <button class="engine-toggle-btn" id="engineToggleBtn" onclick="toggleEnginePicker()">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -1794,7 +1795,7 @@ return He}()
       <span class="sb-search-icon">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </span>
-      <input class="sb-search-input" id="sbSearchInput" type="text" placeholder="Search conversations..." oninput="filterConversations(this.value)">
+      <input class="sb-search-input" id="sbSearchInput" type="text" data-i18n-placeholder="searchConversations" placeholder="Search conversations..." oninput="filterConversations(this.value)">
     </div>
   </div>
   <div class="engine-select">
@@ -1806,19 +1807,19 @@ return He}()
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </span>
-      <span class="footer-label">Engines</span>
+      <span class="footer-label" data-i18n="engines">Engines</span>
     </button>
     <button class="footer-btn" onclick="openArtifactsPanel()">
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       </span>
-      <span class="footer-label">Files</span>
+      <span class="footer-label" data-i18n="files">Files</span>
     </button>
     <button class="footer-btn" onclick="openEvolutionPanel()">
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.57-3.25 3.92L12 10v2"/><circle cx="12" cy="16" r="4"/><path d="M8 16h-.5a2.5 2.5 0 0 1 0-5H8"/><path d="M16 16h.5a2.5 2.5 0 0 0 0-5H16"/><path d="M12 20v2"/></svg>
       </span>
-      <span class="footer-label">Memory</span>
+      <span class="footer-label" data-i18n="memory">Memory</span>
     </button>
     <button class="footer-btn" onclick="openAboutPanel();switchAboutTab('changelog',document.querySelectorAll('.about-nav-item')[3])">
       <span class="footer-icon">
@@ -1826,11 +1827,15 @@ return He}()
       </span>
       <span class="footer-label">v0.6.0</span>
     </button>
+    <button class="footer-btn" onclick="I18N.toggleLocale()" title="Switch Language">
+      <span class="footer-icon">🌐</span>
+      <span class="footer-label lang-toggle-label">EN</span>
+    </button>
     <button class="footer-btn" onclick="window.location.href='/api/logout'">
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </span>
-      <span class="footer-label">Logout</span>
+      <span class="footer-label" data-i18n="logout">Logout</span>
     </button>
   </div>
 </aside>
@@ -1838,12 +1843,12 @@ return He}()
 <div class="conv-ctx-menu" id="convCtxMenu">
   <div class="conv-ctx-item" onclick="ctxRenameConv()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-    Rename
+    <span data-i18n="rename">Rename</span>
   </div>
   <div class="conv-ctx-divider"></div>
   <div class="conv-ctx-item danger" onclick="ctxDeleteConv()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-    Delete
+    <span data-i18n="delete">Delete</span>
   </div>
 </div>
 
@@ -1856,51 +1861,51 @@ return He}()
     <div style="display:flex;align-items:center;gap:8px;">
       <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()">&#9776;<span class="menu-dot"></span></button>
       <div class="chat-engine-switcher" id="chatEngineSwitcher" onclick="toggleChatEngineSwitcher(event)">
-        <span class="engine-label" id="engineLabel">Select an engine</span>
+        <span class="engine-label" id="engineLabel" data-i18n="selectEngine">Select an engine</span>
         <div class="chat-engine-dropdown" id="chatEngineDropdown"></div>
       </div>
       <span class="session-info" id="sessionInfo"></span>
     </div>
-    <span class="status" id="statusBadge">Ready</span>
+    <span class="status" id="statusBadge" data-i18n="ready">Ready</span>
   </div>
   <div class="rate-limit-banner" id="rateLimitBanner"></div>
   <div class="messages-wrap">
     <div class="messages" id="messages">
-      <div class="welcome">Select or create a conversation to start</div>
+      <div class="welcome" data-i18n="welcomeMsg">Select or create a conversation to start</div>
     </div>
-    <button class="scroll-bottom-btn" id="scrollBottomBtn" onclick="scrollToBottomManual()">↓ New messages</button>
+    <button class="scroll-bottom-btn" id="scrollBottomBtn" onclick="scrollToBottomManual()" data-i18n="newMessages">↓ New messages</button>
   </div>
   <div class="input-area" id="inputArea">
     <div class="attachment-preview" id="attachmentPreview"></div>
     <div class="input-row">
       <!-- Left: voice/keyboard toggle -->
-      <button class="input-icon-btn" id="voiceToggleBtn" onclick="toggleVoiceMode()" title="Switch to voice">
+      <button class="input-icon-btn" id="voiceToggleBtn" onclick="toggleVoiceMode()" data-i18n-title="switchToVoice" title="Switch to voice">
         <svg id="voiceModeIcon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path class="mic-body" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-        <span class="voice-tooltip" id="voiceTooltip">Listening...</span>
+        <span class="voice-tooltip" id="voiceTooltip" data-i18n="listening">Listening...</span>
       </button>
       <input type="file" id="fileInput" multiple accept="image/*,text/*,.pdf,.json,.py,.js,.ts,.md,.csv,.xml,.yaml,.yml,.toml,.sh,.sql,.log,.cfg,.ini,.env,.jsx,.tsx,.vue,.go,.rs,.java,.c,.cpp,.h,.hpp,.rb,.php,.swift,.kt" style="display:none" onchange="handleFileInput(this.files)">
       <!-- Middle: text input or hold-to-talk -->
       <div class="input-wrapper">
         <div class="autocomplete" id="autocomplete"></div>
-        <textarea id="input" placeholder="Message OpenDaemon..." rows="1" disabled></textarea>
+        <textarea id="input" data-i18n-placeholder="messagePlaceholder" placeholder="Message OpenDaemon..." rows="1" disabled></textarea>
       </div>
-      <button class="voice-hold-btn" id="voiceHoldBtn">Hold to Talk</button>
+      <button class="voice-hold-btn" id="voiceHoldBtn" data-i18n="holdToTalk">Hold to Talk</button>
       <!-- Right: attach + send -->
-      <button class="input-icon-btn attach-plus" id="attachBtn" onclick="triggerFileSelect()" title="Attach files">
+      <button class="input-icon-btn attach-plus" id="attachBtn" onclick="triggerFileSelect()" data-i18n-title="attachFiles" title="Attach files">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
       </button>
-      <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled title="Send">
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled data-i18n-title="send" title="Send">
         <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
       </button>
     </div>
-    <div class="input-hint">Enter to send · Shift+Enter for newline</div>
+    <div class="input-hint" data-i18n="inputHint">Enter to send · Shift+Enter for newline</div>
   </div>
   <!-- Voice overlay for hold-to-talk -->
   <div class="voice-overlay" id="voiceOverlay">
     <div class="voice-overlay-inner">
       <div class="voice-overlay-waves"><span></span><span></span><span></span><span></span><span></span></div>
-      <div class="voice-overlay-text" id="voiceOverlayText">Release to send</div>
-      <div class="voice-overlay-cancel">↑ Slide up to cancel</div>
+      <div class="voice-overlay-text" id="voiceOverlayText" data-i18n="releaseToSend">Release to send</div>
+      <div class="voice-overlay-cancel" data-i18n="slideToCancel">↑ Slide up to cancel</div>
     </div>
   </div>
   <!-- Image lightbox -->
@@ -1916,10 +1921,10 @@ return He}()
       <button class="evo-close" onclick="closeAboutPanel()">&times;</button>
     </div>
     <div class="about-nav" id="aboutNav">
-      <div class="about-nav-item active" onclick="switchAboutTab('intro',this)">产品介绍</div>
-      <div class="about-nav-item" onclick="switchAboutTab('guide',this)">使用指南</div>
-      <div class="about-nav-item" onclick="switchAboutTab('features',this)">功能说明</div>
-      <div class="about-nav-item" onclick="switchAboutTab('changelog',this)">版本历史</div>
+      <div class="about-nav-item active" onclick="switchAboutTab('intro',this)" data-i18n="aboutIntro">产品介绍</div>
+      <div class="about-nav-item" onclick="switchAboutTab('guide',this)" data-i18n="aboutGuide">使用指南</div>
+      <div class="about-nav-item" onclick="switchAboutTab('features',this)" data-i18n="aboutFeatures">功能说明</div>
+      <div class="about-nav-item" onclick="switchAboutTab('changelog',this)" data-i18n="aboutChangelog">版本历史</div>
     </div>
     <div class="about-body" id="aboutBody"></div>
   </div>
@@ -1955,14 +1960,14 @@ return He}()
       <button class="evo-close" onclick="closeEvolutionPanel()">&times;</button>
     </div>
     <div class="evo-tabs">
-      <div class="evo-tab active" onclick="switchEvoTab('knowledge',this)">Knowledge</div>
-      <div class="evo-tab" onclick="switchEvoTab('goals',this)">Goals</div>
-      <div class="evo-tab" onclick="switchEvoTab('reflect',this)">Reflect</div>
-      <div class="evo-tab" onclick="switchEvoTab('pending',this)">Pending <span id="pendingBadge"></span></div>
-      <div class="evo-tab" onclick="switchEvoTab('stats',this)">Stats</div>
-      <div class="evo-tab" onclick="switchEvoTab('agents',this)">Agents</div>
-      <div class="evo-tab" onclick="switchEvoTab('experiments',this)">A/B</div>
-      <div class="evo-tab" onclick="switchEvoTab('tools',this)">Tools <span id="toolsBadge"></span></div>
+      <div class="evo-tab active" onclick="switchEvoTab('knowledge',this)"><span data-i18n="knowledge">Knowledge</span></div>
+      <div class="evo-tab" onclick="switchEvoTab('goals',this)"><span data-i18n="goals">Goals</span></div>
+      <div class="evo-tab" onclick="switchEvoTab('reflect',this)"><span data-i18n="reflect">Reflect</span></div>
+      <div class="evo-tab" onclick="switchEvoTab('pending',this)"><span data-i18n="pending">Pending</span> <span id="pendingBadge"></span></div>
+      <div class="evo-tab" onclick="switchEvoTab('stats',this)"><span data-i18n="stats">Stats</span></div>
+      <div class="evo-tab" onclick="switchEvoTab('agents',this)"><span data-i18n="agents">Agents</span></div>
+      <div class="evo-tab" onclick="switchEvoTab('experiments',this)"><span data-i18n="ab">A/B</span></div>
+      <div class="evo-tab" onclick="switchEvoTab('tools',this)"><span data-i18n="tools">Tools</span> <span id="toolsBadge"></span></div>
     </div>
     <div class="evo-body" id="evoBody"></div>
   </div>
@@ -2062,7 +2067,7 @@ function renderConversations(filter) {
     list = conversations.filter(c => c.title.toLowerCase().includes(q));
   }
   if (list.length === 0) {
-    convList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px;">${filter ? 'No matches' : 'No conversations yet'}</div>`;
+    convList.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px;">${filter ? t('noMatches') : t('noConversationsYet')}</div>`;
     return;
   }
   const now = Date.now();
@@ -2095,9 +2100,9 @@ function renderConversations(filter) {
     }
     return h;
   };
-  html += renderGroup('Today', groups.today);
-  html += renderGroup('Yesterday', groups.yesterday);
-  html += renderGroup('Earlier', groups.earlier);
+  html += renderGroup(t('today'), groups.today);
+  html += renderGroup(t('yesterday'), groups.yesterday);
+  html += renderGroup(t('earlier'), groups.earlier);
   convList.innerHTML = html;
 }
 
@@ -2165,7 +2170,7 @@ async function ctxRenameConv() {
   hideConvCtxMenu();
   const conv = conversations.find(c => c.id === ctxMenuConvId);
   if (!conv) return;
-  const newTitle = prompt('Rename conversation:', conv.title);
+  const newTitle = prompt(t('renameConversation'), conv.title);
   if (newTitle && newTitle.trim()) {
     try {
       await api('PATCH', `/api/conversations/${ctxMenuConvId}`, { title: newTitle.trim() });
@@ -2221,7 +2226,7 @@ async function selectConversation(id) {
     sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
     sendBtn.className = 'send-btn';
     sendBtn.onclick = sendMessage;
-    setStatus('', 'Ready');
+    setStatus('', t('ready'));
   }
 
   // Mark as read and update active state without rebuilding DOM
@@ -2237,7 +2242,7 @@ async function selectConversation(id) {
   const msgs = await api('GET', `/api/conversations/${id}/messages`);
   messagesEl.innerHTML = '';
   if (msgs.length === 0) {
-    messagesEl.innerHTML = '<div class="welcome">Start a conversation</div>';
+    messagesEl.innerHTML = `<div class="welcome">${t('startConversation')}</div>`;
   } else {
     for (const m of msgs) {
       if (m.role === 'user') addUserBubble(m.content, m.attachments);
@@ -2271,10 +2276,10 @@ async function deleteConv(id) {
   if (currentConvId === id) {
     currentConvId = null;
     currentEngine = null;
-    messagesEl.innerHTML = '<div class="welcome">Select or create a conversation to start</div>';
+    messagesEl.innerHTML = `<div class="welcome">${t('welcomeMsg')}</div>`;
     inputEl.disabled = true;
     sendBtn.disabled = true;
-    $('engineLabel').textContent = 'Select an engine';
+    $('engineLabel').textContent = t('selectEngine');
   }
   renderConversations();
 }
@@ -2459,7 +2464,7 @@ async function handleFiles(files) {
   if (!currentConvId) return;
   const maxFiles = 5;
   const remaining = maxFiles - pendingAttachments.length;
-  if (remaining <= 0) { alert('Max 5 attachments per message'); return; }
+  if (remaining <= 0) { alert(t('allFieldsRequired')); return; }
   const toProcess = files.slice(0, remaining);
 
   for (const file of toProcess) {
@@ -2502,7 +2507,7 @@ async function handleFiles(files) {
       const resp = await fetch('/api/upload', { method: 'POST', body: formData });
       const results = await resp.json();
       // Server may return {error:"..."} or [{error:"..."}, ...]
-      if (!Array.isArray(results)) throw new Error(results.error || 'Upload failed');
+      if (!Array.isArray(results)) throw new Error(results.error || t('uploadFailed'));
       if (!results[0] || results[0].error) throw new Error(results[0]?.error || 'Upload returned empty');
       const att = results[0];
       att._thumbId = thumbId;
@@ -2544,7 +2549,7 @@ async function compressImage(file) {
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         canvas.toBlob((blob) => {
           if (blob) resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-          else reject(new Error('compression failed'));
+          else reject(new Error(t('compressionFailed')));
         }, 'image/jpeg', 0.85);
       } catch (e) { reject(e); }
     };
@@ -2623,7 +2628,7 @@ async function sendMessage() {
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
   sendBtn.className = 'send-btn stop';
   sendBtn.onclick = stopStreaming;
-  setStatus('busy', 'Thinking');
+  setStatus('busy', t('thinking'));
 
   abortController = new AbortController();
   // Safety timeout: auto-abort if streaming hangs for 5 minutes
@@ -2633,7 +2638,7 @@ async function sendMessage() {
   bubble = createAssistantBubble();
   const loadingEl = document.createElement('div');
   loadingEl.className = 'loading-indicator';
-  loadingEl.innerHTML = '<div class="spinner"></div><span>Thinking...</span>';
+  loadingEl.innerHTML = `<div class="spinner"></div><span>${t('thinkingEllipsis')}</span>`;
   bubble.appendChild(loadingEl);
   scrollToBottom();
 
@@ -2752,7 +2757,7 @@ async function sendMessage() {
               case 'result':
                 removeLoading();
                 flushRender(); // finalize any pending text
-                setStatus('', 'Done');
+                setStatus('', t('done'));
                 if (data.result && !bubble.querySelector('.streamed-text') && bubble.children.length === 0) {
                   const p = document.createElement('div'); p.innerHTML = renderMd(data.result); bubble.appendChild(p);
                 }
@@ -2797,7 +2802,7 @@ async function sendMessage() {
               case 'error':
                 removeLoading();
                 bubble.innerHTML += `<p style="color:#f87171;">${esc(data.message)}</p>`;
-                setStatus('error', 'Error');
+                setStatus('error', t('error'));
                 break;
             }
           } catch {}
@@ -2860,7 +2865,7 @@ function finishStreaming(gen) {
   streamingConvId = null;
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>'; sendBtn.className = 'send-btn'; sendBtn.onclick = sendMessage;
   sendBtn.disabled = false; // ensure button is always re-enabled
-  setStatus('', 'Ready');
+  setStatus('', t('ready'));
   // Remove any lingering loading indicators (e.g. when stop is clicked early)
   try { document.querySelectorAll('.loading-indicator').forEach(el => el.remove()); } catch(e) {}
   inputEl.focus();
@@ -2919,27 +2924,27 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
 function addUserBubble(text, attachments) {
   const w = messagesEl.querySelector('.welcome'); if (w) w.remove();
   const div = document.createElement('div'); div.className = 'message user';
-  div.innerHTML = `<button class="msg-copy" onclick="copyMsg(this)">Copy</button><div class="bubble">${text ? esc(text) : ''}</div>`;
+  div.innerHTML = `<button class="msg-copy" onclick="copyMsg(this)">${t('copy')}</button><div class="bubble">${text ? esc(text) : ''}</div>`;
   const bubble = div.querySelector('.bubble');
   if (attachments && attachments.length > 0) renderAttachmentsInBubble(bubble, attachments);
   messagesEl.appendChild(div); scrollToBottom();
 }
 function addAssistantBubble(text) {
   const div = document.createElement('div'); div.className = 'message assistant';
-  div.innerHTML = `<button class="msg-copy" onclick="copyMsg(this)">Copy</button><div class="bubble">${renderMd(text)}</div>`;
+  div.innerHTML = `<button class="msg-copy" onclick="copyMsg(this)">${t('copy')}</button><div class="bubble">${renderMd(text)}</div>`;
   messagesEl.appendChild(div);
 }
 function copyMsg(btn) {
   const bubble = btn.closest('.message').querySelector('.bubble');
   const text = bubble.innerText;
   navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = 'Copy', 1500);
+    btn.textContent = t('copied');
+    setTimeout(() => btn.textContent = t('copy'), 1500);
   });
 }
 function addStreamingBubble(partialContent) {
   const div = document.createElement('div'); div.className = 'message assistant';
-  const spinnerHtml = '<div class="loading-indicator"><div class="spinner"></div><span>Responding...</span></div>';
+  const spinnerHtml = `<div class="loading-indicator"><div class="spinner"></div><span>${t('responding')}</span></div>`;
   if (partialContent) {
     div.innerHTML = `<div class="bubble">${renderMd(partialContent)}${spinnerHtml}</div>`;
   } else {
@@ -3105,8 +3110,8 @@ function renderMd(text) {
 function copyCode(btn) {
   const code = btn.closest('pre').querySelector('code').textContent;
   navigator.clipboard.writeText(code).then(() => {
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = 'Copy', 1500);
+    btn.textContent = t('copied');
+    setTimeout(() => btn.textContent = t('copy'), 1500);
   });
 }
 
@@ -3748,7 +3753,7 @@ async function loadPendingBadge() {
 
 async function loadEvoTab(tab) {
   const body = $('evoBody');
-  body.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:20px;">Loading...</div>';
+  body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px;">${t('loading')}</div>`;
 
   try {
     if (tab === 'knowledge') await loadKnowledgeTab(body);
@@ -3767,7 +3772,7 @@ async function loadEvoTab(tab) {
 async function loadKnowledgeTab(body) {
   const entries = await api('GET', '/api/knowledge');
   if (!entries.length) {
-    body.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:40px;">No knowledge yet. Run a reflection to start learning!</div>';
+    body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:40px;">${t('noKnowledge')}</div>`;
     return;
   }
   const categories = {};
@@ -3783,14 +3788,14 @@ async function loadKnowledgeTab(body) {
         <div class="k-entry-header">
           <div>
             <div class="k-entry-title">${esc(item.title)}</div>
-            <div class="k-entry-meta">Tags: ${esc(item.tags || 'none')} · Confidence: ${(item.confidence || 0).toFixed(1)} · ${item.source_type}</div>
+            <div class="k-entry-meta">${t('tags')}: ${esc(item.tags || 'none')} · ${t('confidence')}: ${(item.confidence || 0).toFixed(1)} · ${item.source_type}</div>
           </div>
           <div class="k-entry-actions" onclick="event.stopPropagation()">
             <button onclick="evalKEntry(${item.id}, this)" title="Run evaluation">📊</button>
             <button onclick="deleteKEntry(${item.id})">🗑️</button>
           </div>
         </div>
-        <div class="k-entry-content" id="k-content-${item.id}">Loading...</div>
+        <div class="k-entry-content" id="k-content-${item.id}">${t('loading')}</div>
       </div>`;
     }
     html += '</div>';
@@ -3802,16 +3807,16 @@ async function toggleKEntry(id) {
   const el = document.getElementById(`k-${id}`);
   const contentEl = document.getElementById(`k-content-${id}`);
   el.classList.toggle('expanded');
-  if (el.classList.contains('expanded') && contentEl.textContent === 'Loading...') {
+  if (el.classList.contains('expanded') && contentEl.textContent === t('loading')) {
     try {
       const data = await api('GET', `/api/knowledge/${id}`);
       contentEl.textContent = data.content || '(empty)';
-    } catch { contentEl.textContent = 'Failed to load'; }
+    } catch { contentEl.textContent = t('failedToLoad'); }
   }
 }
 
 async function deleteKEntry(id) {
-  if (!confirm('Delete this knowledge entry?')) return;
+  if (!confirm(t('deleteKnowledgeConfirm'))) return;
   await api('DELETE', `/api/knowledge/${id}`);
   loadEvoTab('knowledge');
 }
@@ -3834,11 +3839,11 @@ async function loadGoalsTab(body) {
   const data = await api('GET', '/api/goals');
   body.innerHTML = `
     <div class="evo-section">
-      <h3>Growth Goals</h3>
-      <p style="font-size:12px;color:var(--text-3);margin-bottom:8px;">Define what your daemon should learn and improve on. This guides the reflection process.</p>
+      <h3>${t('growthGoals')}</h3>
+      <p style="font-size:12px;color:var(--text-3);margin-bottom:8px;">${t('goalsDesc')}</p>
       <textarea class="goals-editor" id="goalsEditor">${esc(data.content || '')}</textarea>
       <div style="margin-top:10px;display:flex;gap:8px;">
-        <button class="evo-action-btn" onclick="saveGoals()">Save Goals</button>
+        <button class="evo-action-btn" onclick="saveGoals()">${t('saveGoals')}</button>
       </div>
     </div>`;
 }
@@ -3846,7 +3851,7 @@ async function loadGoalsTab(body) {
 async function saveGoals() {
   const content = $('goalsEditor').value;
   await api('PUT', '/api/goals', { content });
-  alert('Goals saved!');
+  alert(t('goalsSaved'));
 }
 
 async function loadReflectTab(body) {
@@ -3854,38 +3859,38 @@ async function loadReflectTab(body) {
     api('GET', '/api/evolution/status'),
     api('GET', '/api/reflect/history?limit=10'),
   ]);
-  const lastReflect = status.last_reflection_at ? new Date(status.last_reflection_at).toLocaleString() : 'Never';
+  const lastReflect = status.last_reflection_at ? new Date(status.last_reflection_at).toLocaleString() : t('never');
 
   // Build engine options
   const engineOpts = engines.map(e => `<option value="${e.id}">${esc(e.label)}</option>`).join('');
 
   body.innerHTML = `
     <div class="evo-section">
-      <h3>Run Reflection</h3>
+      <h3>${t('runReflection')}</h3>
       <p style="font-size:12px;color:var(--text-3);margin-bottom:12px;">
-        Strategy: <strong>${esc(status.strategy)}</strong> · Last reflection: <strong>${lastReflect}</strong>
+        ${t('strategy')}: <strong>${esc(status.strategy)}</strong> · ${t('lastReflection')}: <strong>${lastReflect}</strong>
       </p>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
         <div>
-          <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">Engine</label>
+          <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">${t('engine')}</label>
           <select id="reflectEngine" style="width:100%;padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;">
             ${engineOpts}
           </select>
         </div>
         <div>
-          <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">Time Range</label>
+          <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">${t('timeRange')}</label>
           <select id="reflectRange" style="width:100%;padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;" onchange="updateReflectPreview()">
-            <option value="last">Since last reflection</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="all">All time</option>
+            <option value="last">${t('sinceLastReflection')}</option>
+            <option value="7d">${t('last7Days')}</option>
+            <option value="30d">${t('last30Days')}</option>
+            <option value="all">${t('allTime')}</option>
           </select>
         </div>
       </div>
       <div style="margin-bottom:12px;">
         <label style="font-size:12px;color:var(--text-3);display:block;margin-bottom:4px;">
-          Max traces: <strong id="traceLimitVal">50</strong>
+          ${t('maxTraces')}: <strong id="traceLimitVal">50</strong>
         </label>
         <input type="range" id="reflectLimit" min="10" max="200" step="10" value="50"
           style="width:100%;accent-color:var(--accent);"
@@ -3893,16 +3898,16 @@ async function loadReflectTab(body) {
       </div>
 
       <div id="reflectPreview" style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--text-2);">
-        Loading preview...
+        ${t('loadingPreview')}
       </div>
 
-      <button class="evo-action-btn" id="reflectBtn" onclick="runReflection()">Start Reflection</button>
+      <button class="evo-action-btn" id="reflectBtn" onclick="runReflection()">${t('startReflection')}</button>
       <div id="reflectOutput" style="margin-top:12px;"></div>
     </div>
 
     ${history.length > 0 ? `
     <div class="evo-section" style="margin-top:20px;">
-      <h3>Reflection History</h3>
+      <h3>${t('reflectionHistory')}</h3>
       <div id="reflectHistory">
         ${history.map(r => {
           const date = new Date(r.created_at).toLocaleString();
@@ -3915,7 +3920,7 @@ async function loadReflectTab(body) {
               <span style="color:var(--text-3);margin-left:8px;">${trigger}</span>
             </div>
             <div style="color:var(--text-3);">
-              ${r.trace_count} traces · ${r.insights_accepted} accepted · ${tokens} tokens ${cost}
+              ${r.trace_count} ${t('traces')} · ${r.insights_accepted} ${t('accepted')} · ${tokens} ${t('tokens')} ${cost}
             </div>
           </div>`;
         }).join('')}
@@ -3952,7 +3957,7 @@ function updateReflectPreview() {
         $('reflectBtn').disabled = false;
       }
     } catch {
-      previewEl.innerHTML = 'Failed to load preview';
+      previewEl.innerHTML = t('failedToLoad');
     }
   }, 300);
 }
@@ -3960,7 +3965,7 @@ function updateReflectPreview() {
 async function runReflection() {
   const btn = $('reflectBtn');
   btn.disabled = true;
-  btn.textContent = 'Reflecting...';
+  btn.textContent = t('reflecting');
   const outputEl = $('reflectOutput');
   outputEl.innerHTML = '<div class="reflect-output" id="reflectStream"></div>';
   const streamEl = $('reflectStream');
@@ -4033,8 +4038,8 @@ async function runReflection() {
             <span style="color:var(--text-3);font-size:11px;margin-left:6px;">confidence: ${(p.confidence || 0).toFixed(2)}</span>
             <div style="margin-top:6px;font-size:13px;color:var(--text-2);">${esc(p.content)}</div>
             <div class="insight-actions">
-              <button class="btn-accept" onclick="acceptInsightInline(${p.id})">✓ Accept</button>
-              <button class="btn-reject" onclick="rejectInsightInline(${p.id})">✗ Reject</button>
+              <button class="btn-accept" onclick="acceptInsightInline(${p.id})">✓ ${t('accept')}</button>
+              <button class="btn-reject" onclick="rejectInsightInline(${p.id})">✗ ${t('reject')}</button>
             </div>
           </div>`;
         }
@@ -4048,7 +4053,7 @@ async function runReflection() {
   }
 
   btn.disabled = false;
-  btn.textContent = 'Start Reflection';
+  btn.textContent = t('startReflection');
 }
 
 async function acceptInsightInline(id) {
@@ -4068,7 +4073,7 @@ async function rejectInsightInline(id) {
 async function loadPendingTab(body) {
   const pending = await api('GET', '/api/evolution/pending');
   if (!pending.length) {
-    body.innerHTML = '<div style="color:var(--text-3);text-align:center;padding:40px;">No pending insights. All caught up!</div>';
+    body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:40px;">${t('noPending')}</div>`;
     return;
   }
   let html = `<div class="evo-section"><h3>Pending Insights (${pending.length})</h3><p style="font-size:12px;color:var(--text-3);margin-bottom:12px;">Review insights from automatic reflections. Accept to add to knowledge base, or reject.</p>`;
@@ -4269,8 +4274,8 @@ async function loadExperimentsTab(body) {
     const experiments = await api('GET', '/api/experiments');
     let html = `<div class="evo-section">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3>A/B Experiments</h3>
-        <button class="p4-btn primary" onclick="showCreateExperiment()">+ New Experiment</button>
+        <h3>${t('abExperiments')}</h3>
+        <button class="p4-btn primary" onclick="showCreateExperiment()">${t('newExperiment')}</button>
       </div>
     </div>`;
 
@@ -4290,15 +4295,15 @@ async function loadExperimentsTab(body) {
           <div style="display:flex;align-items:center;gap:8px;">
             <label style="font-size:12px;color:var(--text-3);">Min conversations:</label>
             <input id="expMinConvs" type="number" value="20" min="4" style="width:60px;padding:6px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;">
-            <button class="p4-btn primary" onclick="submitCreateExperiment()">Create</button>
-            <button class="p4-btn" onclick="document.getElementById('createExpForm').style.display='none'">Cancel</button>
+            <button class="p4-btn primary" onclick="submitCreateExperiment()">${t('create')}</button>
+            <button class="p4-btn" onclick="document.getElementById('createExpForm').style.display='none'">${t('cancel')}</button>
           </div>
         </div>
       </div>
     </div>`;
 
     if (experiments.length === 0) {
-      html += `<div class="p4-empty">No experiments yet. Create one to start A/B testing!</div>`;
+      html += `<div class="p4-empty">${t('noExperiments')}</div>`;
     } else {
       for (const exp of experiments) {
         const fbA = exp.feedback_a ? JSON.parse(exp.feedback_a) : { good:0, bad:0 };
@@ -4323,9 +4328,9 @@ async function loadExperimentsTab(body) {
             </div>
           </div>
           ${exp.status === 'active' ? `<div class="p4-actions">
-            <button class="p4-btn success" onclick="decideExperiment(${exp.id},'A')">Pick A</button>
-            <button class="p4-btn success" onclick="decideExperiment(${exp.id},'B')">Pick B</button>
-            <button class="p4-btn danger" onclick="cancelExperiment(${exp.id})">Cancel</button>
+            <button class="p4-btn success" onclick="decideExperiment(${exp.id},'A')">${t('pickA')}</button>
+            <button class="p4-btn success" onclick="decideExperiment(${exp.id},'B')">${t('pickB')}</button>
+            <button class="p4-btn danger" onclick="cancelExperiment(${exp.id})">${t('cancel')}</button>
           </div>` : ''}
         </div>`;
       }
@@ -4348,14 +4353,14 @@ async function submitCreateExperiment() {
     const variantA = $('expVarA').value;
     const variantB = $('expVarB').value;
     const minConversations = parseInt($('expMinConvs').value) || 20;
-    if (!name || !variantA || !variantB) { alert('All fields required'); return; }
+    if (!name || !variantA || !variantB) { alert(t('allFieldsRequired')); return; }
     await api('POST', '/api/experiments', { name, surface, variantA, variantB, minConversations });
     loadEvoTab('experiments');
   } catch (err) { alert(err.message); }
 }
 
 async function decideExperiment(id, winner) {
-  if (!confirm(`Declare Variant ${winner} as winner?`)) return;
+  if (!confirm(t('declareWinnerConfirm', {winner}))) return;
   try {
     await api('POST', `/api/experiments/${id}/decide`, { winner });
     loadEvoTab('experiments');
@@ -4363,7 +4368,7 @@ async function decideExperiment(id, winner) {
 }
 
 async function cancelExperiment(id) {
-  if (!confirm('Cancel this experiment?')) return;
+  if (!confirm(t('cancelExperimentConfirm'))) return;
   try {
     await api('DELETE', `/api/experiments/${id}`);
     loadEvoTab('experiments');
@@ -4375,14 +4380,14 @@ async function loadToolsTab(body) {
   try {
     const tools = await api('GET', '/api/self-coded-tools');
     let html = `<div class="evo-section">
-      <h3>Self-Coded Tools</h3>
+      <h3>${t('selfCodedTools')}</h3>
       <div style="font-size:12px;color:var(--text-3);margin-bottom:12px;">
-        Tools auto-proposed by the reflection system when it detects repeating patterns that could be automated.
+        ${t('toolsDesc')}
       </div>
     </div>`;
 
     if (tools.length === 0) {
-      html += `<div class="p4-empty">No self-coded tools yet. The system will propose tools when it detects automation opportunities during reflection.</div>`;
+      html += `<div class="p4-empty">${t('noTools')}</div>`;
     } else {
       for (const tool of tools) {
         html += `<div class="p4-card">
@@ -4390,14 +4395,14 @@ async function loadToolsTab(body) {
             <span class="p4-card-title">🔧 ${esc(tool.tool_name)}</span>
             <span class="p4-status ${tool.status}">${esc(tool.status)}</span>
           </div>
-          <div class="p4-card-meta">${esc(tool.description||'No description')}</div>
+          <div class="p4-card-meta">${esc(tool.description||t('noDescription'))}</div>
           ${tool.origin_pattern ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px;">Pattern: ${esc(tool.origin_pattern.substring(0,100))}</div>` : ''}
-          ${tool.code ? `<details style="margin-top:8px;"><summary style="font-size:12px;color:var(--text-2);cursor:pointer;">View Code</summary><div class="p4-code">${esc(tool.code)}</div></details>` : ''}
+          ${tool.code ? `<details style="margin-top:8px;"><summary style="font-size:12px;color:var(--text-2);cursor:pointer;">${t('viewCode')}</summary><div class="p4-code">${esc(tool.code)}</div></details>` : ''}
           ${tool.test_result ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px;">Validation: ${esc(tool.test_result.substring(0,100))}</div>` : ''}
           <div class="p4-actions">
-            ${tool.status === 'proposed' || tool.status === 'generated' || tool.status === 'validated' ? `<button class="p4-btn success" onclick="approveTool(${tool.id})">Approve & Install</button><button class="p4-btn danger" onclick="rejectTool(${tool.id})">Reject</button>` : ''}
-            ${tool.status === 'installed' ? `<button class="p4-btn danger" onclick="disableTool(${tool.id})">Disable</button>` : ''}
-            ${tool.status === 'disabled' ? `<button class="p4-btn success" onclick="enableTool(${tool.id})">Re-enable</button>` : ''}
+            ${tool.status === 'proposed' || tool.status === 'generated' || tool.status === 'validated' ? `<button class="p4-btn success" onclick="approveTool(${tool.id})">${t('approveInstall')}</button><button class="p4-btn danger" onclick="rejectTool(${tool.id})">${t('reject')}</button>` : ''}
+            ${tool.status === 'installed' ? `<button class="p4-btn danger" onclick="disableTool(${tool.id})">${t('disable')}</button>` : ''}
+            ${tool.status === 'disabled' ? `<button class="p4-btn success" onclick="enableTool(${tool.id})">${t('reenable')}</button>` : ''}
           </div>
         </div>`;
       }
@@ -4410,11 +4415,11 @@ async function loadToolsTab(body) {
 }
 
 async function approveTool(id) {
-  if (!confirm('Validate and install this tool?')) return;
+  if (!confirm(t('validateToolConfirm'))) return;
   try {
     await api('POST', `/api/self-coded-tools/${id}/approve`);
     loadEvoTab('tools');
-  } catch (err) { alert('Install failed: ' + err.message); }
+  } catch (err) { alert(t('installFailed') + ': ' + err.message); }
 }
 
 async function rejectTool(id) {
@@ -4440,14 +4445,14 @@ async function enableTool(id) {
 
 async function runNextEval(btn) {
   const orig = btn.textContent;
-  btn.textContent = 'Running...';
+  btn.textContent = t('running');
   btn.disabled = true;
   try {
     const res = await api('POST', '/api/evaluations/run');
-    btn.textContent = res.status ? `Done: ${res.status}` : 'Done';
+    btn.textContent = res.status ? `${t('done')}: ${res.status}` : t('done');
     setTimeout(() => { btn.textContent = orig; btn.disabled = false; loadEvoTab('agents'); }, 2000);
   } catch (err) {
-    btn.textContent = 'Error';
+    btn.textContent = t('error');
     setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
   }
 }
@@ -4492,14 +4497,14 @@ async function renderEnginesList() {
 
     body.innerHTML = `
       ${agentic.length ? `<div class="eng-group">
-        <div class="eng-group-title">🤖 Agentic Engines</div>
+        <div class="eng-group-title">${t('agenticEngines')}</div>
         ${agentic.map(e => renderEngineCard(e)).join('')}
       </div>` : ''}
       ${apiEngines.length ? `<div class="eng-group">
-        <div class="eng-group-title">🔌 API Engines</div>
+        <div class="eng-group-title">${t('apiEngines')}</div>
         ${apiEngines.map(e => renderEngineCard(e)).join('')}
       </div>` : ''}
-      <button class="eng-add-btn" onclick="showEngineForm()">+ Add Engine</button>
+      <button class="eng-add-btn" onclick="showEngineForm()">${t('addEngine')}</button>
     `;
   } catch (err) {
     body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px">Failed to load engines: ${esc(err.message)}</div>`;
@@ -4511,12 +4516,12 @@ function renderEngineCard(e) {
     <div class="eng-card-icon">${esc(e.icon || e.label[0])}</div>
     <div class="eng-card-info">
       <div class="eng-card-label">${esc(e.label)}</div>
-      <div class="eng-card-meta">${e.category === 'agentic' ? 'Agentic' : 'API'} · ${esc(e.id)}</div>
+      <div class="eng-card-meta">${e.category === 'agentic' ? t('agentic') : t('api')} · ${esc(e.id)}</div>
     </div>
     <div class="eng-card-actions">
-      <button onclick="testEngine('${e.id}', this)" title="Test">Test</button>
-      <button onclick="editEngine('${e.id}')" title="Edit">Edit</button>
-      <button onclick="deleteEngine('${e.id}')" title="Delete">✕</button>
+      <button onclick="testEngine('${e.id}', this)" title="${t('test')}">${t('test')}</button>
+      <button onclick="editEngine('${e.id}')" title="${t('edit')}">${t('edit')}</button>
+      <button onclick="deleteEngine('${e.id}')" title="${t('delete')}">✕</button>
     </div>
   </div>`;
 }
@@ -4545,14 +4550,14 @@ async function testEngine(id, btn) {
 }
 
 async function deleteEngine(id) {
-  if (!confirm(`Delete engine "${id}"?`)) return;
+  if (!confirm(t('deleteEngineConfirm', {id}))) return;
   try {
     const result = await api('DELETE', `/api/engines/${id}`);
     engines = result.engines || engines;
     renderEnginesList();
     renderEnginePicker();
   } catch (err) {
-    alert('Delete failed: ' + err.message);
+    alert(t('deleteFailed') + ': ' + err.message);
   }
 }
 
@@ -4561,7 +4566,7 @@ async function editEngine(id) {
     const config = await api('GET', `/api/engines/${id}`);
     showEngineForm(config);
   } catch (err) {
-    alert('Failed to load engine config: ' + err.message);
+    alert(t('failedToLoad') + ': ' + err.message);
   }
 }
 
@@ -4573,7 +4578,7 @@ function showEngineForm(existing) {
 
   body.innerHTML = `
     <div class="eng-form">
-      <div class="eng-form-title">${isEdit ? 'Edit Engine' : 'Add Engine'}</div>
+      <div class="eng-form-title">${isEdit ? t('editEngine') : t('addEngineTitle')}</div>
 
       ${!isEdit ? `<div class="eng-type-selector">
         <div class="eng-type-card${category === 'agentic' ? ' selected' : ''}" onclick="selectEngineType('agentic')">
@@ -4592,9 +4597,9 @@ function showEngineForm(existing) {
       <div id="engFields">${isEdit ? buildEngineFields(existing) : ''}</div>
 
       <div class="eng-form-actions">
-        <button class="eng-btn-secondary" onclick="renderEnginesList()">Cancel</button>
-        ${isEdit || type ? `<button class="eng-btn-secondary eng-btn-test" onclick="testEngineForm()">Test</button>` : ''}
-        <button class="eng-btn-primary" onclick="saveEngineForm(${isEdit ? 'true' : 'false'})">${isEdit ? 'Save' : 'Add'}</button>
+        <button class="eng-btn-secondary" onclick="renderEnginesList()">${t('cancel')}</button>
+        ${isEdit || type ? `<button class="eng-btn-secondary eng-btn-test" onclick="testEngineForm()">${t('test')}</button>` : ''}
+        <button class="eng-btn-primary" onclick="saveEngineForm(${isEdit ? 'true' : 'false'})">${isEdit ? t('save') : t('add')}</button>
         <span class="eng-test-status" id="engTestStatus"></span>
       </div>
     </div>
@@ -4783,14 +4788,14 @@ async function saveEngineForm(isEdit) {
   const model = $('engModel')?.value?.trim();
   const apiKey = $('engApiKey')?.value?.trim();
 
-  if (!label) { alert('Name is required'); return; }
-  if (!type) { alert('Please select engine type'); return; }
+  if (!label) { alert(t('nameRequired')); return; }
+  if (!type) { alert(t('selectEngineType')); return; }
 
   const payload = { label, icon: icon || label[0] };
 
   if (type === 'openai') {
     const baseUrl = $('engBaseUrl')?.value?.trim();
-    if (!baseUrl) { alert('Base URL is required'); return; }
+    if (!baseUrl) { alert(t('baseUrlRequired')); return; }
     payload.type = 'openai';
     payload.provider = { baseUrl, model: model || '' };
     if (apiKey && !apiKey.includes('***')) payload.provider.apiKey = apiKey;
@@ -4818,7 +4823,7 @@ async function saveEngineForm(isEdit) {
     } else if (authMode === 'custom') {
       const baseUrl = $('engBaseUrl')?.value?.trim();
       const format = $('engFormat')?.value || 'openai';
-      if (!baseUrl) { alert('Base URL is required'); return; }
+      if (!baseUrl) { alert(t('baseUrlRequired')); return; }
       payload.provider.baseUrl = baseUrl;
       payload.provider.format = format;
       if (apiKey && !apiKey.includes('***')) payload.provider.apiKey = apiKey;
@@ -4848,18 +4853,18 @@ async function saveEngineForm(isEdit) {
     renderEnginesList();
     renderEnginePicker();
   } catch (err) {
-    alert('Save failed: ' + err.message);
+    alert(t('saveFailed') + ': ' + err.message);
   }
 }
 
 async function testEngineForm() {
   const status = $('engTestStatus');
   if (!engFormEditId) {
-    status.textContent = 'Save first to test';
+    status.textContent = t('saveFirst');
     status.className = 'eng-test-status fail';
     return;
   }
-  status.textContent = 'Testing...';
+  status.textContent = t('testing');
   status.className = 'eng-test-status loading';
   try {
     const result = await api('POST', `/api/engines/${engFormEditId}/test`);
@@ -4912,7 +4917,7 @@ async function switchConvEngine(engineId, e) {
     $('engineLabel').textContent = eng?.label || engineId;
     renderConversations();
   } catch (err) {
-    alert('Switch failed: ' + err.message);
+    alert(t('switchFailed') + ': ' + err.message);
   }
 }
 
@@ -4936,6 +4941,7 @@ function renderEnginePicker() {
 }
 
 // ── Start ──
+I18N.translatePage();
 init();
 </script>
 </body>
