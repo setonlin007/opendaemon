@@ -55,7 +55,7 @@ const MIME = {
 // ── Version check ──
 const PKG_VERSION = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf-8")).version;
 let _versionCache = { latest: null, checkedAt: 0 };
-const VERSION_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const VERSION_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 async function checkLatestVersion() {
   const now = Date.now();
