@@ -46,6 +46,16 @@ curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install
 
 The installer handles all dependencies automatically.
 
+### Update
+
+Run the same install command again — it auto-detects existing installs, pulls latest code, updates dependencies, and restarts the service:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install.sh | bash
+```
+
+Your config, data, and knowledge are preserved.
+
 ## Manual Install
 
 ```bash

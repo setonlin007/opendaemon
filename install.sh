@@ -119,10 +119,15 @@ install_macos() {
   npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code 2>&1 | tail -1
   log "pm2 and claude-code installed"
 
-  # Clone
-  if [ -d "$INSTALL_DIR/.git" ]; then
-    info "Project exists, pulling latest..."
-    cd "$INSTALL_DIR"
+  # Resolve symlink (workspace may have moved the project)
+  REAL_DIR="$(readlink -f "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"
+
+  # Clone or update
+  IS_UPDATE=false
+  if [ -d "$REAL_DIR/.git" ]; then
+    IS_UPDATE=true
+    info "Existing install detected, updating..."
+    cd "$REAL_DIR"
     git pull origin "$BRANCH"
     log "Updated to latest"
   else
@@ -132,7 +137,7 @@ install_macos() {
     log "Cloned to $INSTALL_DIR"
   fi
 
-  cd "$INSTALL_DIR"
+  cd "$REAL_DIR"
 
   # Dependencies
   info "Installing Node.js dependencies..."
@@ -157,14 +162,19 @@ install_macos() {
   # Proxy
   setup_proxy "$HOME"
 
-  # Start
-  info "Starting OpenDaemon..."
-  pm2 delete opendaemon 2>/dev/null || true
-  cd "$INSTALL_DIR"
-  if [ -n "$PROXY_URL" ]; then
-    HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" pm2 start server.mjs --name opendaemon > /dev/null 2>&1
+  # Start / Restart
+  if [ "$IS_UPDATE" = true ] && pm2 describe opendaemon > /dev/null 2>&1; then
+    info "Restarting OpenDaemon..."
+    pm2 restart opendaemon > /dev/null 2>&1
   else
-    pm2 start server.mjs --name opendaemon > /dev/null 2>&1
+    info "Starting OpenDaemon..."
+    pm2 delete opendaemon 2>/dev/null || true
+    cd "$REAL_DIR"
+    if [ -n "$PROXY_URL" ]; then
+      HTTP_PROXY="$PROXY_URL" HTTPS_PROXY="$PROXY_URL" pm2 start server.mjs --name opendaemon > /dev/null 2>&1
+    else
+      pm2 start server.mjs --name opendaemon > /dev/null 2>&1
+    fi
   fi
   pm2 save > /dev/null 2>&1
   log "OpenDaemon started"
@@ -232,11 +242,16 @@ install_linux() {
   npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code 2>&1 | tail -1
   log "pm2 and claude-code installed"
 
-  # Clone
-  if [ -d "$INSTALL_DIR/.git" ]; then
-    info "Project exists, pulling latest..."
-    cd "$INSTALL_DIR"
-    su - "$RUN_USER" -c "cd $INSTALL_DIR && git pull origin $BRANCH"
+  # Resolve symlink
+  REAL_DIR="$(readlink -f "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"
+
+  # Clone or update
+  IS_UPDATE=false
+  if [ -d "$REAL_DIR/.git" ]; then
+    IS_UPDATE=true
+    info "Existing install detected, updating..."
+    cd "$REAL_DIR"
+    su - "$RUN_USER" -c "cd $REAL_DIR && git pull origin $BRANCH"
     log "Updated to latest"
   else
     info "Cloning repository..."
@@ -245,7 +260,7 @@ install_linux() {
     log "Cloned to $INSTALL_DIR"
   fi
 
-  cd "$INSTALL_DIR"
+  cd "$REAL_DIR"
 
   # Dependencies
   info "Installing Node.js dependencies..."
@@ -273,13 +288,18 @@ install_linux() {
   # Proxy
   setup_proxy "/home/$RUN_USER"
 
-  # Start
-  info "Starting OpenDaemon..."
+  # Start / Restart
   PM2_ENV=""
   if [ -n "$PROXY_URL" ]; then
     PM2_ENV="HTTP_PROXY=$PROXY_URL HTTPS_PROXY=$PROXY_URL"
   fi
-  su - "$RUN_USER" -c "pm2 delete opendaemon 2>/dev/null; cd $INSTALL_DIR && $PM2_ENV pm2 start server.mjs --name opendaemon && pm2 save" > /dev/null 2>&1
+  if [ "$IS_UPDATE" = true ]; then
+    info "Restarting OpenDaemon..."
+    su - "$RUN_USER" -c "pm2 restart opendaemon && pm2 save" > /dev/null 2>&1
+  else
+    info "Starting OpenDaemon..."
+    su - "$RUN_USER" -c "pm2 delete opendaemon 2>/dev/null; cd $REAL_DIR && $PM2_ENV pm2 start server.mjs --name opendaemon && pm2 save" > /dev/null 2>&1
+  fi
   log "OpenDaemon started"
 
   # Auto-start on boot (skip on WSL — no systemd usually)
