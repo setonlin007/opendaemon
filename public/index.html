@@ -1858,6 +1858,12 @@ return He}()
       </span>
       <span class="footer-label" data-i18n="memory">Memory</span>
     </button>
+    <button class="footer-btn" onclick="openAboutAndAccess()">
+      <span class="footer-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      </span>
+      <span class="footer-label">Share</span>
+    </button>
   </div>
 </aside>
 <!-- Context menu (shared, positioned dynamically) -->
@@ -3464,6 +3470,12 @@ let currentEvoTab = 'knowledge';
     setTimeout(() => { tip.style.transition = 'opacity 0.3s'; tip.style.opacity = '0'; setTimeout(() => tip.remove(), 300); }, 4000);
   }, 1500);
 })();
+function openAboutAndAccess() {
+  $('aboutOverlay').classList.add('open');
+  const accessTab = document.querySelector('[data-i18n="accessLink"]');
+  switchAboutTab('access', accessTab);
+}
+
 function openAboutPanel() {
   $('aboutOverlay').classList.add('open');
   switchAboutTab('intro', document.querySelector('.about-nav-item'));
@@ -3529,22 +3541,22 @@ async function renderAccessInline() {
     const links = linksRes.links || [];
     let html = '';
 
-    // ── Section 1: Tunnel ──
+    // ── Tunnel ──
     html += `<div style="margin-bottom:16px;padding:12px;background:var(--input-bg);border-radius:8px;">`;
-    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;">Tunnel 公网访问</div>`;
+    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:6px;">Tunnel 公网访问</div>`;
     html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">通过 Cloudflare Tunnel 将本地服务暴露到公网，访问仍需密码登录。</div>`;
     if (tunnelUrl) {
-      html += `<div class="access-status"><span class="dot on"></span>Tunnel: <a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a></div>`;
+      html += `<div class="access-status"><span class="dot on"></span><a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a></div>`;
+      html += `<button onclick="stopTunnel()" style="margin-top:10px;padding:6px 16px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-3);font-size:12px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='#f87171';this.style.color='#f87171'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-3)'">关闭 Tunnel</button>`;
     } else {
-      html += `<div class="access-status"><span class="dot off"></span>Tunnel 未启动</div>`;
-      html += `<button class="access-gen-btn" id="tunnelStartBtn" onclick="startTunnelManual()" style="margin-top:8px;">启动 Tunnel</button>`;
+      html += `<button class="access-gen-btn" id="tunnelStartBtn" onclick="startTunnel()" style="margin-top:4px;">启动 Tunnel</button>`;
     }
     html += `</div>`;
 
-    // ── Section 2: Access Link ──
-    html += `<div style="padding:12px;background:var(--input-bg);border-radius:8px;">`;
-    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;">分享链接</div>`;
-    html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">生成一个临时链接，分享给他人即可免密码登录。链接到期或撤销后自动失效。${!tunnelUrl ? '<br>需先启动 Tunnel 才能生成外网可用的分享链接。' : ''}</div>`;
+    // ── 分享链接 ──
+    html += `<div style="padding:12px;background:var(--input-bg);border-radius:8px;${!tunnelUrl ? 'opacity:0.5;pointer-events:none;' : ''}">`;
+    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:6px;">分享链接</div>`;
+    html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">生成一个临时链接，他人打开即可免密码登录。链接到期或撤销后失效。${!tunnelUrl ? '<br>请先启动 Tunnel。' : ''}</div>`;
     if (links.length > 0) {
       const l = links[0];
       const expiresIn = Math.max(0, Math.round((l.expires - Date.now()) / 3600000));
@@ -4754,22 +4766,22 @@ async function renderAccessPanel() {
 
     let html = '';
 
-    // ── Section 1: Tunnel ──
+    // ── Tunnel ──
     html += `<div style="margin-bottom:16px;padding:12px;background:var(--input-bg);border-radius:8px;">`;
-    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;">Tunnel 公网访问</div>`;
+    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:6px;">Tunnel 公网访问</div>`;
     html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">通过 Cloudflare Tunnel 将本地服务暴露到公网，访问仍需密码登录。</div>`;
     if (tunnelUrl) {
-      html += `<div class="access-status"><span class="dot on"></span>Tunnel: <a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a></div>`;
+      html += `<div class="access-status"><span class="dot on"></span><a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a></div>`;
+      html += `<button onclick="stopTunnel()" style="margin-top:10px;padding:6px 16px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-3);font-size:12px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='#f87171';this.style.color='#f87171'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-3)'">关闭 Tunnel</button>`;
     } else {
-      html += `<div class="access-status"><span class="dot off"></span>Tunnel 未启动</div>`;
-      html += `<button class="access-gen-btn" id="tunnelStartBtn" onclick="startTunnelManual()" style="margin-top:8px;">启动 Tunnel</button>`;
+      html += `<button class="access-gen-btn" id="tunnelStartBtn" onclick="startTunnel()" style="margin-top:4px;">启动 Tunnel</button>`;
     }
     html += `</div>`;
 
-    // ── Section 2: Access Link ──
-    html += `<div style="padding:12px;background:var(--input-bg);border-radius:8px;">`;
-    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;">分享链接</div>`;
-    html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">生成一个临时链接，分享给他人即可免密码登录。链接到期或撤销后自动失效。${!tunnelUrl ? '<br>需先启动 Tunnel 才能生成外网可用的分享链接。' : ''}</div>`;
+    // ── 分享链接 ──
+    html += `<div style="padding:12px;background:var(--input-bg);border-radius:8px;${!tunnelUrl ? 'opacity:0.5;pointer-events:none;' : ''}">`;
+    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:6px;">分享链接</div>`;
+    html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">生成一个临时链接，他人打开即可免密码登录。链接到期或撤销后失效。${!tunnelUrl ? '<br>请先启动 Tunnel。' : ''}</div>`;
     if (links.length > 0) {
       const link = links[0];
       const expiresIn = Math.max(0, Math.round((link.expires - Date.now()) / 3600000));
@@ -4825,11 +4837,11 @@ function renderAccessResult(result) {
   </div>`;
 }
 
-async function startTunnelManual() {
+async function startTunnel() {
   const btn = $('tunnelStartBtn');
   try {
     btn.disabled = true;
-    btn.textContent = '启动中... (可能需要 10-20 秒)';
+    btn.textContent = '启动中... (约 10-20 秒)';
     await api('POST', '/api/tunnel');
     renderAccessPanel();
     renderAccessInline();
@@ -4837,6 +4849,17 @@ async function startTunnelManual() {
     btn.disabled = false;
     btn.textContent = '启动 Tunnel';
     alert('启动失败: ' + err.message);
+  }
+}
+
+async function stopTunnel() {
+  try {
+    await api('DELETE', '/api/tunnel');
+    _lastAccessResult = null;
+    renderAccessPanel();
+    renderAccessInline();
+  } catch (err) {
+    alert('关闭失败: ' + err.message);
   }
 }
 
@@ -4860,7 +4883,7 @@ async function generateAccessLink() {
     renderAccessInline();
   } catch (err) {
     btn.disabled = false;
-    btn.textContent = '一键生成访问链接';
+    btn.textContent = '生成分享链接';
     alert('生成失败: ' + err.message);
   }
 }

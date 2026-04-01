@@ -413,6 +413,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (method === "DELETE" && path === "/api/tunnel") {
+    try {
+      const tunnel = await import("./lib/tunnel.mjs");
+      tunnel.stopTunnel();
+      // Also revoke all access links since they depend on tunnel
+      const links = auth.listAccessLinks();
+      for (const link of links) {
+        auth.revokeAccessLink(link.tokenFull);
+      }
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
   // ── Access Link Management ──
 
   if (method === "POST" && path === "/api/access-link") {
