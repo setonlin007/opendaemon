@@ -41,9 +41,11 @@ git pull origin main 2>&1 || { echo "FAILED: git pull failed"; exit 1; }
 NEW_COMMIT=$(git rev-parse --short HEAD)
 echo "New commit: $NEW_COMMIT"
 
-if [ "$PREV_COMMIT" = "$NEW_COMMIT" ]; then
-  echo "No new changes to deploy."
-  exit 0
+# Check if server is already running this commit (compare against last deploy, not just git)
+RUNNING_BOOT=$(curl -s --max-time 3 "http://127.0.0.1:3456/api/init" 2>/dev/null | node -e "process.stdin.on('data',d=>{try{console.log(JSON.parse(d).server_boot||'')}catch{console.log('')}})" 2>/dev/null || echo "")
+if [ "$PREV_COMMIT" = "$NEW_COMMIT" ] && [ -n "$RUNNING_BOOT" ]; then
+  # Code hasn't changed, but check if server has been restarted since last code change
+  echo "Code is up to date. Forcing restart to apply pending changes..."
 fi
 
 # ── Step 2: Syntax check ──
