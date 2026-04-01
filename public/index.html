@@ -3077,7 +3077,7 @@ function addToolBlock(bubble, name, input) {
     if (!group || !group.classList.contains('tool-group')) {
       group = document.createElement('div');
       group.className = 'tool-group';
-      group.innerHTML = `<div class="tool-group-header" onclick="this.parentElement.classList.toggle('expanded')"><span>Tools</span><span class="tool-group-count">0</span></div><div class="tool-group-items"></div>`;
+      group.innerHTML = `<div class="tool-group-header" onclick="var g=this.parentElement;g.classList.toggle('expanded');g.dataset.userCollapsed=g.classList.contains('expanded')?'':'1'"><span>Tools</span><span class="tool-group-count">0</span></div><div class="tool-group-items"></div>`;
       bubble.appendChild(group);
     }
     const items = group.querySelector('.tool-group-items');
@@ -3087,8 +3087,8 @@ function addToolBlock(bubble, name, input) {
     items.insertAdjacentHTML('beforeend', itemHtml);
     const count = items.querySelectorAll('.tool-item').length;
     countEl.textContent = count + ' call' + (count > 1 ? 's' : '');
-    // Auto expand the group header so user sees tools accumulating
-    if (!group.classList.contains('expanded')) group.classList.add('expanded');
+    // Auto expand only if user hasn't manually collapsed it
+    if (!group.dataset.userCollapsed && !group.classList.contains('expanded')) group.classList.add('expanded');
     scrollToBottom();
   } catch(e) {
     console.error('addToolBlock error:', e);

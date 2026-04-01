@@ -122,6 +122,7 @@ input:focus, select:focus { border-color: #e94560; }
     <div class="dot active" id="dot1"></div>
     <div class="dot" id="dot2"></div>
     <div class="dot" id="dot3"></div>
+    <div class="dot" id="dot4"></div>
   </div>
 
   <!-- Step 1: Password -->
@@ -174,22 +175,48 @@ input:focus, select:focus { border-color: #e94560; }
     </div>
   </div>
 
-  <!-- Step 3: Confirm & Create -->
+  <!-- Step 3: Tunnel -->
   <div class="step" id="step3">
+    <h2>Enable public access?</h2>
+    <p style="font-size:13px;color:#888;margin-bottom:16px;line-height:1.6;">
+      Generate a free HTTPS tunnel via Cloudflare, so you can access OpenDaemon from anywhere — no port forwarding needed.
+    </p>
+    <div class="engine-cards">
+      <div class="engine-card" onclick="selectTunnel(true)" id="cardTunnelYes">
+        <div class="icon">🌐</div>
+        <div class="name">Enable Tunnel</div>
+        <div class="desc">Get a public HTTPS URL</div>
+      </div>
+      <div class="engine-card selected" onclick="selectTunnel(false)" id="cardTunnelNo">
+        <div class="icon">🏠</div>
+        <div class="name">Skip</div>
+        <div class="desc">Local access only (localhost)</div>
+      </div>
+    </div>
+    <p style="font-size:11px;color:#555;margin-top:12px;">You can always enable this later from settings.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="prevStep(3)">Back</button>
+      <button class="btn btn-primary" onclick="nextStep(3)">Next</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Confirm & Create -->
+  <div class="step" id="step4">
     <h2>Ready to go!</h2>
     <div id="summary" style="background:#16213e;padding:16px;border-radius:8px;font-size:13px;line-height:1.8;"></div>
     <div class="error" id="setupError"></div>
     <div class="btn-row">
-      <button class="btn btn-secondary" onclick="prevStep(3)">Back</button>
+      <button class="btn btn-secondary" onclick="prevStep(4)">Back</button>
       <button class="btn btn-primary" id="createBtn" onclick="doSetup()">Create & Start</button>
     </div>
   </div>
 
-  <!-- Step 4: Success -->
-  <div class="step" id="step4">
+  <!-- Step 5: Success -->
+  <div class="step" id="step5">
     <div class="success">
       <div class="check">&#10003;</div>
       <h2>Setup Complete!</h2>
+      <p id="tunnelResult"></p>
       <p>Redirecting to login...</p>
     </div>
   </div>
@@ -198,20 +225,27 @@ input:focus, select:focus { border-color: #e94560; }
 <script>
 let currentStep = 1;
 let engineType = 'claude-sdk';
+let enableTunnel = false;
 
 function selectEngine(type) {
   engineType = type;
-  document.querySelectorAll('.engine-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('#step2 .engine-card').forEach(c => c.classList.remove('selected'));
   if (type === 'claude-sdk') document.getElementById('cardClaude').classList.add('selected');
   else if (type === 'openai') document.getElementById('cardOpenAI').classList.add('selected');
   else document.getElementById('cardBoth').classList.add('selected');
   document.getElementById('apiFields').className = (type === 'openai' || type === 'both') ? 'api-fields show' : 'api-fields';
 }
 
+function selectTunnel(yes) {
+  enableTunnel = yes;
+  document.getElementById('cardTunnelYes').classList.toggle('selected', yes);
+  document.getElementById('cardTunnelNo').classList.toggle('selected', !yes);
+}
+
 function showStep(n) {
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
   document.getElementById('step' + n).classList.add('active');
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= 4; i++) {
     const dot = document.getElementById('dot' + i);
     dot.className = i < n ? 'dot done' : i === n ? 'dot active' : 'dot';
   }
@@ -233,6 +267,8 @@ function nextStep(from) {
       err.textContent = 'API Base URL is required'; err.style.display = 'block'; return;
     }
     err.style.display = 'none';
+    showStep(3);
+  } else if (from === 3) {
     // Build summary
     let html = '<b>Password:</b> ••••••••<br>';
     html += '<b>Engines:</b><br>';
@@ -241,8 +277,9 @@ function nextStep(from) {
       const label = document.getElementById('engineLabel').value || 'API Engine';
       html += '&nbsp;&nbsp;• ' + label + '<br>';
     }
+    html += '<b>Tunnel:</b> ' + (enableTunnel ? 'Enabled (Cloudflare)' : 'Disabled') + '<br>';
     document.getElementById('summary').innerHTML = html;
-    showStep(3);
+    showStep(4);
   }
 }
 
@@ -274,8 +311,28 @@ async function doSetup() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Setup failed');
-    showStep(4);
-    setTimeout(() => { window.location.href = '/login.html'; }, 2000);
+
+    // Start tunnel if enabled
+    let tunnelInfo = '';
+    if (enableTunnel) {
+      btn.textContent = 'Starting tunnel...';
+      try {
+        const tRes = await fetch('/api/tunnel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + btoa(payload.password) },
+        });
+        const tData = await tRes.json();
+        if (tData.url) {
+          tunnelInfo = 'Tunnel: <a href="' + tData.url + '" style="color:#e94560" target="_blank">' + tData.url + '</a>';
+        }
+      } catch (tErr) {
+        tunnelInfo = 'Tunnel failed to start — you can retry from settings.';
+      }
+    }
+
+    document.getElementById('tunnelResult').innerHTML = tunnelInfo;
+    showStep(5);
+    setTimeout(() => { window.location.href = '/login.html'; }, enableTunnel ? 4000 : 2000);
   } catch (e) {
     err.textContent = e.message;
     err.style.display = 'block';
