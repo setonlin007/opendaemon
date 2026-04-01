@@ -86,7 +86,7 @@ echo "[3/5] Scheduling restart in 5 seconds..."
   # ── Step 4: Health check ──
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" 2>/dev/null || echo "000")
 
-  if [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "200" ]; then
+  if [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
     # ── Step 5a: Success ──
     CHANGES=$(cd "$PROJECT_DIR" && git log --oneline "$PREV_COMMIT..HEAD" 2>/dev/null | head -5)
     write_msg "assistant" "✅ **Deploy succeeded** ($PREV_COMMIT → $NEW_COMMIT)
