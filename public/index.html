@@ -3527,18 +3527,36 @@ async function renderAccessInline() {
     ]);
     const tunnelUrl = tunnelRes.url;
     const links = linksRes.links || [];
-    let html = `<div class="access-status"><span class="dot ${tunnelUrl ? 'on' : 'off'}"></span>${tunnelUrl ? `Tunnel: <a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a>` : 'Tunnel 未启动 (生成链接时自动启动)'}</div>`;
-    html += `<div class="access-options"><div class="eng-field"><label>有效期</label><select id="accessExpiry"><option value="1">1 小时</option><option value="6">6 小时</option><option value="24" selected>24 小时</option><option value="72">3 天</option><option value="168">7 天</option><option value="720">30 天</option></select></div><div class="eng-field"><label>使用次数</label><select id="accessMaxUses"><option value="1" selected>仅 1 次</option><option value="3">3 次</option><option value="10">10 次</option><option value="0">不限</option></select></div></div>`;
-    html += `<button class="access-gen-btn" id="accessGenBtn" onclick="generateAccessLink()">一键生成访问链接</button>`;
-    if (_lastAccessResult) html += renderAccessResult(_lastAccessResult);
-    if (links.length > 0) {
-      html += `<hr class="access-divider"><div class="access-links-title">活跃链接 (${links.length})</div>`;
-      for (const l of links) {
-        const expiresIn = Math.max(0, Math.round((l.expires - Date.now()) / 3600000));
-        const usesText = l.maxUses === 0 ? `已用 ${l.used} 次` : `${l.used}/${l.maxUses} 次`;
-        html += `<div class="access-link-item"><div class="al-info"><div class="al-token">${esc(l.token)}</div><div class="al-meta">${usesText} · ${expiresIn > 0 ? expiresIn + 'h 后过期' : '即将过期'}</div></div><button class="al-revoke" onclick="revokeAccessLink('${esc(l.tokenFull)}')">撤销</button></div>`;
-      }
+    let html = '';
+
+    // ── Section 1: Tunnel ──
+    html += `<div style="margin-bottom:16px;padding:12px;background:var(--input-bg);border-radius:8px;">`;
+    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;">Tunnel 公网访问</div>`;
+    html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">通过 Cloudflare Tunnel 将本地服务暴露到公网，访问仍需密码登录。</div>`;
+    if (tunnelUrl) {
+      html += `<div class="access-status"><span class="dot on"></span>Tunnel: <a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a></div>`;
+    } else {
+      html += `<div class="access-status"><span class="dot off"></span>Tunnel 未启动</div>`;
+      html += `<button class="access-gen-btn" id="tunnelStartBtn" onclick="startTunnelManual()" style="margin-top:8px;">启动 Tunnel</button>`;
     }
+    html += `</div>`;
+
+    // ── Section 2: Access Link ──
+    html += `<div style="padding:12px;background:var(--input-bg);border-radius:8px;">`;
+    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;">分享链接</div>`;
+    html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">生成一个临时链接，分享给他人即可免密码登录。链接到期或撤销后自动失效。${!tunnelUrl ? '<br>需先启动 Tunnel 才能生成外网可用的分享链接。' : ''}</div>`;
+    if (links.length > 0) {
+      const l = links[0];
+      const expiresIn = Math.max(0, Math.round((l.expires - Date.now()) / 3600000));
+      if (_lastAccessResult) html += renderAccessResult(_lastAccessResult);
+      html += `<div class="access-links-title">当前活跃链接</div>`;
+      html += `<div class="access-link-item"><div class="al-info"><div class="al-token">${esc(l.token)}</div><div class="al-meta">${expiresIn > 0 ? expiresIn + 'h 后过期' : '即将过期'}</div></div><button class="al-revoke" onclick="revokeAccessLink('${esc(l.tokenFull)}')">撤销</button></div>`;
+    } else {
+      html += `<div class="access-options"><div class="eng-field"><label>有效期</label><select id="accessExpiry"><option value="1">1 小时</option><option value="6">6 小时</option><option value="24" selected>24 小时</option><option value="72">3 天</option><option value="168">7 天</option><option value="720">30 天</option></select></div></div>`;
+      html += `<button class="access-gen-btn" id="accessGenBtn" onclick="generateAccessLink()">生成分享链接</button>`;
+      if (_lastAccessResult) html += renderAccessResult(_lastAccessResult);
+    }
+    html += `</div>`;
     body.innerHTML = html;
   } catch (err) {
     body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px">Failed: ${esc(err.message)}</div>`;
@@ -4736,60 +4754,56 @@ async function renderAccessPanel() {
 
     let html = '';
 
-    // Tunnel status
-    html += `<div class="access-status">
-      <span class="dot ${tunnelUrl ? 'on' : 'off'}"></span>
-      ${tunnelUrl ? `Tunnel: <a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a>` : 'Tunnel 未启动 (生成链接时自动启动)'}
-    </div>`;
-
-    // Options
-    html += `<div class="access-options">
-      <div class="eng-field">
-        <label>有效期</label>
-        <select id="accessExpiry">
-          <option value="1">1 小时</option>
-          <option value="6">6 小时</option>
-          <option value="24" selected>24 小时</option>
-          <option value="72">3 天</option>
-          <option value="168">7 天</option>
-          <option value="720">30 天</option>
-        </select>
-      </div>
-      <div class="eng-field">
-        <label>使用次数</label>
-        <select id="accessMaxUses">
-          <option value="1" selected>仅 1 次</option>
-          <option value="3">3 次</option>
-          <option value="10">10 次</option>
-          <option value="0">不限</option>
-        </select>
-      </div>
-    </div>`;
-
-    // Generate button
-    html += `<button class="access-gen-btn" id="accessGenBtn" onclick="generateAccessLink()">一键生成访问链接</button>`;
-
-    // Last generated result
-    if (_lastAccessResult) {
-      html += renderAccessResult(_lastAccessResult);
+    // ── Section 1: Tunnel ──
+    html += `<div style="margin-bottom:16px;padding:12px;background:var(--input-bg);border-radius:8px;">`;
+    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;">Tunnel 公网访问</div>`;
+    html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">通过 Cloudflare Tunnel 将本地服务暴露到公网，访问仍需密码登录。</div>`;
+    if (tunnelUrl) {
+      html += `<div class="access-status"><span class="dot on"></span>Tunnel: <a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a></div>`;
+    } else {
+      html += `<div class="access-status"><span class="dot off"></span>Tunnel 未启动</div>`;
+      html += `<button class="access-gen-btn" id="tunnelStartBtn" onclick="startTunnelManual()" style="margin-top:8px;">启动 Tunnel</button>`;
     }
+    html += `</div>`;
 
-    // Existing links
+    // ── Section 2: Access Link ──
+    html += `<div style="padding:12px;background:var(--input-bg);border-radius:8px;">`;
+    html += `<div style="font-size:13px;font-weight:600;color:var(--text-2);margin-bottom:8px;">分享链接</div>`;
+    html += `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">生成一个临时链接，分享给他人即可免密码登录。链接到期或撤销后自动失效。${!tunnelUrl ? '<br>需先启动 Tunnel 才能生成外网可用的分享链接。' : ''}</div>`;
     if (links.length > 0) {
-      html += `<hr class="access-divider">`;
-      html += `<div class="access-links-title">活跃链接 (${links.length})</div>`;
-      for (const link of links) {
-        const expiresIn = Math.max(0, Math.round((link.expires - Date.now()) / 3600000));
-        const usesText = link.maxUses === 0 ? `已用 ${link.used} 次` : `${link.used}/${link.maxUses} 次`;
-        html += `<div class="access-link-item">
-          <div class="al-info">
-            <div class="al-token">${esc(link.token)}</div>
-            <div class="al-meta">${usesText} · ${expiresIn > 0 ? expiresIn + 'h 后过期' : '即将过期'}</div>
-          </div>
-          <button class="al-revoke" onclick="revokeAccessLink('${esc(link.tokenFull)}')">撤销</button>
-        </div>`;
+      const link = links[0];
+      const expiresIn = Math.max(0, Math.round((link.expires - Date.now()) / 3600000));
+      if (_lastAccessResult) {
+        html += renderAccessResult(_lastAccessResult);
+      }
+      html += `<div class="access-links-title">当前活跃链接</div>`;
+      html += `<div class="access-link-item">
+        <div class="al-info">
+          <div class="al-token">${esc(link.token)}</div>
+          <div class="al-meta">${expiresIn > 0 ? expiresIn + 'h 后过期' : '即将过期'}</div>
+        </div>
+        <button class="al-revoke" onclick="revokeAccessLink('${esc(link.tokenFull)}')">撤销</button>
+      </div>`;
+    } else {
+      html += `<div class="access-options">
+        <div class="eng-field">
+          <label>有效期</label>
+          <select id="accessExpiry">
+            <option value="1">1 小时</option>
+            <option value="6">6 小时</option>
+            <option value="24" selected>24 小时</option>
+            <option value="72">3 天</option>
+            <option value="168">7 天</option>
+            <option value="720">30 天</option>
+          </select>
+        </div>
+      </div>`;
+      html += `<button class="access-gen-btn" id="accessGenBtn" onclick="generateAccessLink()">生成分享链接</button>`;
+      if (_lastAccessResult) {
+        html += renderAccessResult(_lastAccessResult);
       }
     }
+    html += `</div>`;
 
     body.innerHTML = html;
   } catch (err) {
@@ -4802,8 +4816,7 @@ function renderAccessResult(result) {
     <div class="access-result-label">访问链接 (点击复制)</div>
     <div class="access-result-url" onclick="copyAccessUrl(this)" title="点击复制">${esc(result.accessUrl)}</div>
     <div class="access-result-meta">
-      有效期 ${result.expiresIn} 小时 · ${result.maxUses === 0 ? '不限次数' : '可用 ' + result.maxUses + ' 次'}
-      ${result.tunnelUrl ? ' · via Cloudflare Tunnel' : ' · 仅局域网'}
+      有效期 ${result.expiresIn} 小时${result.tunnelUrl ? ' · via Cloudflare Tunnel' : ' · 仅局域网'}
     </div>
     <div class="access-result-actions">
       <button onclick="copyAccessUrl(this.parentElement.parentElement.querySelector('.access-result-url'))">复制链接</button>
@@ -4812,18 +4825,39 @@ function renderAccessResult(result) {
   </div>`;
 }
 
+async function startTunnelManual() {
+  const btn = $('tunnelStartBtn');
+  try {
+    btn.disabled = true;
+    btn.textContent = '启动中... (可能需要 10-20 秒)';
+    await api('POST', '/api/tunnel');
+    renderAccessPanel();
+    renderAccessInline();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = '启动 Tunnel';
+    alert('启动失败: ' + err.message);
+  }
+}
+
 async function generateAccessLink() {
   const btn = $('accessGenBtn');
   try {
     btn.disabled = true;
-    btn.textContent = '生成中... (首次启动 Tunnel 可能需 10-20 秒)';
+    btn.textContent = '生成中...';
+
+    // Revoke all existing links first (only one active link allowed)
+    const existing = await api('GET', '/api/access-links').catch(() => ({ links: [] }));
+    for (const link of (existing.links || [])) {
+      await api('DELETE', `/api/access-links/${link.tokenFull}`).catch(() => {});
+    }
 
     const expiresIn = parseFloat($('accessExpiry').value);
-    const maxUses = parseInt($('accessMaxUses').value);
 
-    const result = await api('POST', '/api/access-link', { expiresIn, maxUses });
+    const result = await api('POST', '/api/access-link', { expiresIn, maxUses: 0 });
     _lastAccessResult = result;
     renderAccessPanel();
+    renderAccessInline();
   } catch (err) {
     btn.disabled = false;
     btn.textContent = '一键生成访问链接';
@@ -4866,7 +4900,9 @@ function generateQR(url) {
 async function revokeAccessLink(token) {
   try {
     await api('DELETE', `/api/access-links/${token}`);
+    _lastAccessResult = null;
     renderAccessPanel();
+    renderAccessInline();
   } catch (err) {
     alert('撤销失败: ' + err.message);
   }

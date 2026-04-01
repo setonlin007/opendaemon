@@ -399,6 +399,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (method === "POST" && path === "/api/tunnel") {
+    try {
+      const tunnel = await import("./lib/tunnel.mjs");
+      let url = tunnel.getTunnelUrl();
+      if (!url) {
+        url = await tunnel.startTunnel(PORT);
+      }
+      json(res, { ok: true, url });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
   // ── Access Link Management ──
 
   if (method === "POST" && path === "/api/access-link") {
@@ -1556,17 +1570,6 @@ async function startup() {
 
   server.listen(PORT, HOST, async () => {
     console.log(`OpenDaemon running at http://${HOST}:${PORT}`);
-
-    // Auto-start Cloudflare Tunnel if enabled
-    if (config.tunnel?.enabled !== false) {
-      try {
-        const { startTunnel } = await import("./lib/tunnel.mjs");
-        const url = await startTunnel(PORT);
-        console.log(`OpenDaemon available at ${url}`);
-      } catch (err) {
-        console.log(`[tunnel] not started: ${err.message}`);
-      }
-    }
   });
 }
 
