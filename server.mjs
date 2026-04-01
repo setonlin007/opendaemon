@@ -842,6 +842,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Browse directories (for workspace path autocomplete) ──
+  if (method === "GET" && path === "/api/browse-dirs") {
+    try {
+      const qIdx = req.url.indexOf("?");
+      const params = qIdx >= 0 ? new URLSearchParams(req.url.substring(qIdx)) : new URLSearchParams();
+      const dirPath = params.get("path") || homedir();
+      const resolved = resolve(dirPath);
+      if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+        json(res, { path: resolved, dirs: [] });
+        return;
+      }
+      const entries = readdirSync(resolved, { withFileTypes: true });
+      const dirs = entries
+        .filter(e => e.isDirectory() && !e.name.startsWith("."))
+        .map(e => e.name)
+        .sort((a, b) => a.localeCompare(b))
+        .slice(0, 50);
+      json(res, { path: resolved, dirs });
+    } catch (err) {
+      json(res, { path: "", dirs: [], error: err.message });
+    }
+    return;
+  }
+
   // ── Workspace: artifacts directory tree ──
 
   const WORKSPACE_ARTIFACTS = join(homedir(), "workspace", "artifacts");
