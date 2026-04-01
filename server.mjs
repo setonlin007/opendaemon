@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
 import { dirname, join, basename } from "path";
 import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, writeFileSync } from "fs";
+import { execSync, exec } from "child_process";
 import { homedir } from "os";
 
 import { loadConfig, getEngineById, getEngines, getEngineFullConfig, saveEngines, mergeEngineUpdate, needsSetup, createInitialConfig } from "./lib/config.mjs";
@@ -50,6 +51,30 @@ const MIME = {
   ".py": "text/x-python; charset=utf-8",
   ".sh": "text/x-shellscript; charset=utf-8",
 };
+
+// ── Version check ──
+const PKG_VERSION = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf-8")).version;
+let _versionCache = { latest: null, checkedAt: 0 };
+const VERSION_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+async function checkLatestVersion() {
+  const now = Date.now();
+  if (_versionCache.latest && (now - _versionCache.checkedAt) < VERSION_CACHE_TTL) {
+    return _versionCache.latest;
+  }
+  try {
+    const resp = await fetch(
+      "https://raw.githubusercontent.com/setonlin007/opendaemon/main/package.json",
+      { headers: { "User-Agent": "OpenDaemon" }, signal: AbortSignal.timeout(5000) }
+    );
+    if (!resp.ok) return _versionCache.latest || null;
+    const remote = await resp.json();
+    _versionCache = { latest: remote.version, checkedAt: now };
+    return remote.version;
+  } catch {
+    return _versionCache.latest || null;
+  }
+}
 
 // ── Initialize ──
 const SERVER_BOOT = Date.now();
@@ -327,6 +352,38 @@ const server = http.createServer(async (req, res) => {
   if (method === "GET" && path === "/api/ping") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, boot: SERVER_BOOT }));
+    return;
+  }
+
+  // ── Version check ──
+  if (method === "GET" && path === "/api/version") {
+    try {
+      const latest = await checkLatestVersion();
+      json(res, { current: PKG_VERSION, latest, updateAvailable: latest ? latest !== PKG_VERSION : false }, 200, req);
+    } catch (err) {
+      json(res, { current: PKG_VERSION, latest: null, updateAvailable: false }, 200, req);
+    }
+    return;
+  }
+
+  // ── One-click update ──
+  if (method === "POST" && path === "/api/update") {
+    try {
+      const prevCommit = execSync("git rev-parse --short HEAD", { cwd: __dirname, encoding: "utf-8" }).trim();
+      const pullResult = execSync("git pull origin main 2>&1", { cwd: __dirname, encoding: "utf-8", timeout: 30000 });
+      const newCommit = execSync("git rev-parse --short HEAD", { cwd: __dirname, encoding: "utf-8" }).trim();
+      // Syntax check before restart
+      execSync("node --check server.mjs", { cwd: __dirname, encoding: "utf-8" });
+      // Send response before restart
+      json(res, { ok: true, prevCommit, newCommit, pullResult: pullResult.trim(), message: "Update pulled. Restarting in 5 seconds..." });
+      // Delayed restart in background
+      const updateCmd = `sleep 5 && cd ${__dirname} && npm install --omit=dev 2>&1 && (cd mcp && [ -d .venv ] && .venv/bin/pip install -r requirements.txt 2>&1 || true) && pm2 restart opendaemon --update-env 2>&1`;
+      const child = exec(updateCmd, { cwd: __dirname, detached: true, stdio: "ignore" });
+      child.unref();
+      _versionCache = { latest: null, checkedAt: 0 };
+    } catch (err) {
+      json(res, { ok: false, error: err.message }, 500);
+    }
     return;
   }
 

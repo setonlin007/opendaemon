@@ -194,6 +194,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .loading-indicator { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 13px; padding: 4px 0; }
 .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 /* Rate limit */
 .rate-limit-banner { display: none; padding: 8px 20px; background: #3a2a00; color: #facc15; font-size: 12px; text-align: center; }
@@ -1956,7 +1957,7 @@ return He}()
 <div class="about-overlay" id="aboutOverlay" onclick="if(event.target===this)closeAboutPanel()">
   <div class="about-panel">
     <div class="about-header">
-      <h2>OpenDaemon</h2>
+      <h2>OpenDaemon <span id="aboutVersion" style="font-size:13px;font-weight:400;color:var(--text-3)"></span></h2>
       <button class="evo-close" onclick="closeAboutPanel()">&times;</button>
     </div>
     <div class="about-nav" id="aboutNav">
@@ -3457,6 +3458,20 @@ let currentEvoTab = 'knowledge';
 function openAboutPanel() {
   $('aboutOverlay').classList.add('open');
   switchAboutTab('intro', document.querySelector('.about-nav-item'));
+  // Fetch version info
+  fetch('/api/version').then(r => r.json()).then(data => {
+    window._versionData = data;
+    const el = $('aboutVersion');
+    if (el) el.textContent = 'v' + data.current;
+    if (data.updateAvailable) {
+      const navItems = document.querySelectorAll('.about-nav-item');
+      const changelogNav = navItems[3];
+      if (changelogNav && !changelogNav.querySelector('.update-dot')) {
+        changelogNav.insertAdjacentHTML('beforeend',
+          ' <span class="update-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4ade80;margin-left:4px;vertical-align:middle;animation:pulse 2s infinite;"></span>');
+      }
+    }
+  }).catch(() => {});
 }
 function closeAboutPanel() { $('aboutOverlay').classList.remove('open'); }
 function switchAboutTab(tab, el) {
@@ -3467,6 +3482,42 @@ function switchAboutTab(tab, el) {
   else if (tab === 'guide') body.innerHTML = renderAboutGuide();
   else if (tab === 'features') body.innerHTML = renderAboutFeatures();
   else if (tab === 'changelog') body.innerHTML = renderAboutChangelog();
+}
+async function doUpdate() {
+  const btn = $('updateBtn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = 'Updating...';
+  btn.style.opacity = '0.6';
+  try {
+    const resp = await fetch('/api/update', { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      btn.textContent = 'Restarting...';
+      btn.style.background = '#60a5fa';
+      setTimeout(() => pollServerRestart(), 8000);
+    } else {
+      btn.textContent = 'Failed: ' + (data.error || 'unknown').substring(0, 40);
+      btn.style.background = '#f87171';
+      setTimeout(() => { btn.textContent = 'Retry'; btn.disabled = false; btn.style.opacity = '1'; btn.style.background = '#4ade80'; }, 3000);
+    }
+  } catch (err) {
+    btn.textContent = 'Network error';
+    btn.style.background = '#f87171';
+  }
+}
+function pollServerRestart(attempts) {
+  attempts = attempts || 0;
+  if (attempts > 20) {
+    const btn = $('updateBtn');
+    if (btn) { btn.textContent = 'Timeout — reload manually'; btn.style.background = '#f87171'; }
+    return;
+  }
+  fetch('/api/version').then(r => r.json()).then(() => {
+    window.location.reload();
+  }).catch(() => {
+    setTimeout(() => pollServerRestart(attempts + 1), 2000);
+  });
 }
 
 function renderAboutIntro() {
@@ -3722,7 +3773,18 @@ function renderAboutFeatures() {
 }
 
 function renderAboutChangelog() {
+  const vd = window._versionData;
+  const updateBanner = (vd && vd.updateAvailable)
+    ? `<div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div>
+          <span style="color:#4ade80;font-weight:600;">New version available: v${vd.latest}</span>
+          <span style="color:var(--text-3);margin-left:8px;">(current: v${vd.current})</span>
+        </div>
+        <button onclick="doUpdate()" id="updateBtn" style="background:#4ade80;color:#000;border:none;padding:6px 16px;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px;">Update Now</button>
+      </div>`
+    : '';
   return `
+${updateBanner}
 <h3>版本历史</h3>
 <div class="version-timeline">
 
