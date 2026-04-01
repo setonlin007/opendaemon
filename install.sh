@@ -113,20 +113,22 @@ install_macos() {
   log "Node $(node --version), Python $(python3 --version 2>&1 | awk '{print $2}')"
 
   # Global tools
-  npm list -g pm2 > /dev/null 2>&1 || npm install -g pm2 > /dev/null 2>&1
-  npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code > /dev/null 2>&1
+  info "Installing pm2..."
+  npm list -g pm2 > /dev/null 2>&1 || npm install -g pm2 2>&1 | tail -1
+  info "Installing claude-code..."
+  npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code 2>&1 | tail -1
   log "pm2 and claude-code installed"
 
   # Clone
   if [ -d "$INSTALL_DIR/.git" ]; then
     info "Project exists, pulling latest..."
     cd "$INSTALL_DIR"
-    git pull origin "$BRANCH" > /dev/null 2>&1
+    git pull origin "$BRANCH"
     log "Updated to latest"
   else
     info "Cloning repository..."
     mkdir -p "$(dirname "$INSTALL_DIR")"
-    git clone --depth 1 -b "$BRANCH" "$REPO" "$INSTALL_DIR" > /dev/null 2>&1
+    git clone --depth 1 -b "$BRANCH" "$REPO" "$INSTALL_DIR"
     log "Cloned to $INSTALL_DIR"
   fi
 
@@ -134,7 +136,7 @@ install_macos() {
 
   # Dependencies
   info "Installing Node.js dependencies..."
-  npm install --production > /dev/null 2>&1
+  npm install --production 2>&1 | tail -1
   log "Node.js dependencies installed"
 
   if [ -f "mcp/requirements.txt" ]; then
@@ -142,7 +144,8 @@ install_macos() {
       info "Creating Python venv..."
       python3 -m venv mcp/.venv
     fi
-    mcp/.venv/bin/pip install -q -r mcp/requirements.txt > /dev/null 2>&1
+    info "Installing Python dependencies..."
+    mcp/.venv/bin/pip install -r mcp/requirements.txt 2>&1 | grep -E "^(Collecting|Installing|Successfully)" || true
     log "Python dependencies installed"
   fi
 
@@ -222,20 +225,22 @@ install_linux() {
   log "Node $(node --version), Python $(python3 --version 2>&1 | awk '{print $2}')"
 
   # Global tools
-  npm list -g pm2 > /dev/null 2>&1 || npm install -g pm2 > /dev/null 2>&1
-  npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code > /dev/null 2>&1
+  info "Installing pm2..."
+  npm list -g pm2 > /dev/null 2>&1 || npm install -g pm2 2>&1 | tail -1
+  info "Installing claude-code..."
+  npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code 2>&1 | tail -1
   log "pm2 and claude-code installed"
 
   # Clone
   if [ -d "$INSTALL_DIR/.git" ]; then
     info "Project exists, pulling latest..."
     cd "$INSTALL_DIR"
-    su - "$RUN_USER" -c "cd $INSTALL_DIR && git pull origin $BRANCH" > /dev/null 2>&1
+    su - "$RUN_USER" -c "cd $INSTALL_DIR && git pull origin $BRANCH"
     log "Updated to latest"
   else
     info "Cloning repository..."
     mkdir -p "$(dirname "$INSTALL_DIR")"
-    git clone --depth 1 -b "$BRANCH" "$REPO" "$INSTALL_DIR" > /dev/null 2>&1
+    git clone --depth 1 -b "$BRANCH" "$REPO" "$INSTALL_DIR"
     log "Cloned to $INSTALL_DIR"
   fi
 
@@ -243,7 +248,7 @@ install_linux() {
 
   # Dependencies
   info "Installing Node.js dependencies..."
-  npm install --production > /dev/null 2>&1
+  npm install --production 2>&1 | tail -1
   log "Node.js dependencies installed"
 
   if [ -f "mcp/requirements.txt" ]; then
@@ -251,7 +256,8 @@ install_linux() {
       info "Creating Python venv..."
       python3 -m venv mcp/.venv
     fi
-    mcp/.venv/bin/pip install -q -r mcp/requirements.txt > /dev/null 2>&1
+    info "Installing Python dependencies..."
+    mcp/.venv/bin/pip install -r mcp/requirements.txt 2>&1 | grep -E "^(Collecting|Installing|Successfully)" || true
     log "Python dependencies installed"
   fi
 
