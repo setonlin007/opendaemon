@@ -17,16 +17,25 @@ It sits on top of LLM engines (Claude SDK, OpenAI-compatible APIs), injects cust
 
 ## Quick Install
 
-One line:
+**Linux (Ubuntu / Debian / CentOS):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install.sh | sudo bash
 ```
 
-With proxy:
+**macOS（不要用 sudo，Homebrew 不支持 root 运行）:**
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install.sh | bash
+```
+
+**With proxy:**
+
+```bash
+# Linux
 curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install.sh | PROXY_URL=http://host:port sudo -E bash
+# macOS
+curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install.sh | PROXY_URL=http://host:port bash
 ```
 
 ### Supported Platforms
