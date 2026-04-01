@@ -294,11 +294,10 @@ install_linux() {
 # ══════════════════════════════════════
 generate_config() {
   if [ ! -f "config.json" ]; then
-    AUTH_PASS=$(openssl rand -hex 8 2>/dev/null || echo "changeme")
     cat > config.json << CONF
 {
   "auth": {
-    "password": "$AUTH_PASS"
+    "password": "change-me"
   },
   "engines": {
     "claude": {
@@ -307,7 +306,7 @@ generate_config() {
   }
 }
 CONF
-    log "Generated config.json (password: $AUTH_PASS)"
+    log "config.json created — setup wizard will guide you on first visit"
   else
     log "config.json already exists, skipping"
   fi
@@ -335,27 +334,19 @@ SETTINGS
 
 show_done() {
   local IP="$1"
-  local PASS
-  PASS=$(grep -o '"password"[[:space:]]*:[[:space:]]*"[^"]*"' config.json 2>/dev/null | head -1 | sed 's/.*: *"//;s/"//' || echo "see config.json")
 
   echo ""
   echo -e "${BOLD}╔══════════════════════════════════════╗${NC}"
   echo -e "${BOLD}║        Installation Complete!         ║${NC}"
   echo -e "${BOLD}╚══════════════════════════════════════╝${NC}"
   echo ""
-  echo -e "  ${CYAN}URL:${NC}       http://${IP}:${PORT}"
-  echo -e "  ${CYAN}Password:${NC}  ${PASS}"
   echo -e "  ${CYAN}Project:${NC}   ${INSTALL_DIR}"
   echo -e "  ${CYAN}Config:${NC}    ${INSTALL_DIR}/config.json"
   echo ""
   echo -e "  ${YELLOW}Next steps:${NC}"
-  if [ "$PLATFORM" = "macos" ]; then
-    echo -e "    1. Login Claude:  ${BOLD}claude${NC}"
-    echo -e "    2. Visit http://localhost:${PORT}"
-  else
-    echo -e "    1. Open firewall port ${PORT}"
-    echo -e "    2. Login Claude:  ${BOLD}su - ${RUN_USER} -c 'claude'${NC}"
-    echo -e "    3. Visit http://${IP}:${PORT} and login"
+  echo -e "    1. Open ${BOLD}http://${IP}:${PORT}${NC} — setup wizard will guide you"
+  if [ "$PLATFORM" != "macos" ]; then
+    echo -e "    2. Open firewall port ${PORT}"
   fi
   echo ""
 }
