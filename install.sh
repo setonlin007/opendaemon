@@ -64,7 +64,7 @@ fi
 
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║       OpenDaemon Installer v0.6      ║${NC}"
+echo -e "${BOLD}║       OpenDaemon Installer v0.7      ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════╝${NC}"
 echo -e "  Platform: ${CYAN}${PLATFORM}${NC}"
 echo ""
