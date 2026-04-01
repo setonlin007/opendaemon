@@ -3531,7 +3531,14 @@ async function renderAccessInline() {
     html += `<div class="access-options"><div class="eng-field"><label>有效期</label><select id="accessExpiry"><option value="1">1 小时</option><option value="6">6 小时</option><option value="24" selected>24 小时</option><option value="72">3 天</option><option value="168">7 天</option><option value="720">30 天</option></select></div><div class="eng-field"><label>使用次数</label><select id="accessMaxUses"><option value="1" selected>仅 1 次</option><option value="3">3 次</option><option value="10">10 次</option><option value="0">不限</option></select></div></div>`;
     html += `<button class="access-gen-btn" id="accessGenBtn" onclick="generateAccessLink()">一键生成访问链接</button>`;
     if (_lastAccessResult) html += renderAccessResult(_lastAccessResult);
-    if (links.length > 0) { html += `<div class="access-links-title">已生成的链接</div>`; links.forEach(l => { html += renderAccessLinkItem(l); }); }
+    if (links.length > 0) {
+      html += `<hr class="access-divider"><div class="access-links-title">活跃链接 (${links.length})</div>`;
+      for (const l of links) {
+        const expiresIn = Math.max(0, Math.round((l.expires - Date.now()) / 3600000));
+        const usesText = l.maxUses === 0 ? `已用 ${l.used} 次` : `${l.used}/${l.maxUses} 次`;
+        html += `<div class="access-link-item"><div class="al-info"><div class="al-token">${esc(l.token)}</div><div class="al-meta">${usesText} · ${expiresIn > 0 ? expiresIn + 'h 后过期' : '即将过期'}</div></div><button class="al-revoke" onclick="revokeAccessLink('${esc(l.tokenFull)}')">撤销</button></div>`;
+      }
+    }
     body.innerHTML = html;
   } catch (err) {
     body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px">Failed: ${esc(err.message)}</div>`;
