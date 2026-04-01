@@ -63,9 +63,9 @@ export async function handleChat(conv, engine, prompt, onEvent, abortSignal, inj
   // Build multimodal prompt if attachments present
   const effectivePrompt = attachments.length > 0 ? buildClaudeContent(prompt, attachments) : prompt;
 
-  let sessionId, resultText;
+  let sessionId, resultText, complete;
   try {
-    ({ sessionId, resultText } = await streamClaude({
+    ({ sessionId, resultText, complete } = await streamClaude({
       prompt: effectivePrompt,
       convId: conv.id,
       sdkSessionId: conv.sdk_session,
@@ -75,9 +75,26 @@ export async function handleChat(conv, engine, prompt, onEvent, abortSignal, inj
       onEvent: wrappedOnEvent,
       abortSignal,
     }));
+  } catch (err) {
+    console.error(`[claude-sdk] handleChat error for ${conv.id}: ${err.message}`);
+    // Mark message as interrupted with whatever we have
+    const partialText = streamedText || "...";
+    updateMessageContent(msg.id, partialText + "\n\n---\n⚠️ *Response interrupted: " + err.message + "*");
+    throw err;
   } finally {
-    const finalText = resultText || streamedText || "...";
-    updateMessageContent(msg.id, finalText);
+    if (!complete && !abortSignal?.aborted) {
+      // Stream ended abnormally — save what we have with a warning
+      const partialText = resultText || streamedText || "...";
+      if (partialText !== "...") {
+        console.warn(`[claude-sdk] incomplete response for ${conv.id}, saving ${partialText.length} chars`);
+        updateMessageContent(msg.id, partialText + "\n\n---\n⚠️ *Response was interrupted, please retry*");
+      } else {
+        updateMessageContent(msg.id, "⚠️ *Response interrupted before any content was generated. Please retry.*");
+      }
+    } else {
+      const finalText = resultText || streamedText || "...";
+      updateMessageContent(msg.id, finalText);
+    }
   }
 
   if (sessionId) updateConversationSdkSession(conv.id, sessionId);
