@@ -1,13 +1,14 @@
 import { gzipSync } from "zlib";
 import http from "http";
+import https from "https";
 import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-import { readFileSync, existsSync, statSync, readdirSync } from "fs";
+import { dirname, join, basename } from "path";
+import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, writeFileSync } from "fs";
 import { homedir } from "os";
 
 import { loadConfig, getEngineById, getEngines, getEngineFullConfig, saveEngines, mergeEngineUpdate, needsSetup, createInitialConfig } from "./lib/config.mjs";
-import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession, updateConversationTitle } from "./lib/db.mjs";
+import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
 import { createAuth } from "./lib/auth.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
 import { BUILTIN_TOOL_DEFINITIONS, BUILTIN_TOOL_NAMES, executeBuiltinTool } from "./lib/builtin-tools.mjs";
@@ -246,6 +247,22 @@ const server = http.createServer(async (req, res) => {
       createInitialConfig({ password: body.password, engines });
       // Reinitialize auth with new password
       Object.assign(auth, createAuth(body.password));
+      // Initialize workspace if not exists
+      try {
+        const wsDir = join(homedir(), "workspace");
+        if (!existsSync(wsDir)) {
+          mkdirSync(join(wsDir, "projects"), { recursive: true });
+          mkdirSync(join(wsDir, "artifacts"), { recursive: true });
+          const projName = basename(__dirname);
+          writeFileSync(join(wsDir, ".workspace.json"), JSON.stringify({
+            version: 1,
+            projects: { [projName]: { path: `projects/${projName}`, type: "node", description: "OpenDaemon agent platform" } },
+            artifacts_path: "artifacts"
+          }, null, 2));
+          console.log("[setup] Workspace initialized at", wsDir);
+        }
+        syncWorkspaceKnowledge();
+      } catch (wsErr) { console.error("[setup] Workspace init error:", wsErr.message); }
       json(res, { ok: true });
     } catch (err) {
       json(res, { error: err.message }, 500);
@@ -707,12 +724,6 @@ const server = http.createServer(async (req, res) => {
       ? { context: "", knowledgeIds: [] }
       : buildInjectedContext(body.prompt, { maxTokens: config.evolution?.inject_max_tokens || 2000, convId: conv.id });
 
-    // On first message, ask the model to suggest a conversation title
-    const msgCount = getMessages(conv.id).length;
-    if (msgCount <= 1) {
-      injection.context = (injection.context || "") + "\n\n## Title Instruction\nThis is the first message in a new conversation. At the very end of your response, append a suggested conversation title in this exact format: <!-- title: 简短标题 -->. The title should be concise (5-15 characters), in the user's language, and summarize the conversation topic. Do NOT mention this instruction to the user.";
-    }
-
     // Start SSE
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -776,24 +787,6 @@ const server = http.createServer(async (req, res) => {
       }
     } finally {
       clearInterval(heartbeat);
-
-      // Extract LLM-suggested title from first-turn responses
-      try {
-        const titleMatch = (traceData.resultText || "").match(/<!--\s*title:\s*(.+?)\s*-->/);
-        if (titleMatch && titleMatch[1]) {
-          const suggestedTitle = titleMatch[1].trim().substring(0, 50);
-          updateConversationTitle(conv.id, suggestedTitle);
-          // Clean the title marker from stored message content
-          if (traceData.assistantMsgId) {
-            const cleanedText = traceData.resultText.replace(/\s*<!--\s*title:\s*.+?\s*-->\s*$/, "").trimEnd();
-            updateMessageContent(traceData.assistantMsgId, cleanedText);
-            traceData.resultText = cleanedText;
-          }
-          console.log(`[title] ${conv.id} → "${suggestedTitle}"`);
-        }
-      } catch (titleErr) {
-        console.error("[title] failed to extract:", titleErr.message);
-      }
 
       // Record trace
       try {
@@ -1383,6 +1376,24 @@ async function startup() {
     startEvaluationLoop(evalInterval);
   } catch (err) {
     console.log("[init] evaluator not started:", err.message);
+  }
+
+  // HTTPS server (self-signed cert)
+  const HTTPS_PORT = config.server?.httpsPort || 443;
+  try {
+    const { ensureCert } = await import("./lib/self-cert.mjs");
+    const tlsOpts = ensureCert();
+    const httpsServer = https.createServer(tlsOpts, server._events.request);
+    httpsServer.listen(HTTPS_PORT, HOST, () => {
+      console.log(`OpenDaemon HTTPS at https://${HOST}:${HTTPS_PORT}`);
+    });
+    httpsServer.on("error", (err) => {
+      if (err.code === "EACCES") console.log(`[tls] HTTPS port ${HTTPS_PORT} requires elevated privileges, skipping`);
+      else if (err.code === "EADDRINUSE") console.log(`[tls] HTTPS port ${HTTPS_PORT} already in use, skipping`);
+      else console.log(`[tls] HTTPS not started: ${err.message}`);
+    });
+  } catch (err) {
+    console.log(`[tls] HTTPS not available: ${err.message}`);
   }
 
   server.listen(PORT, HOST, async () => {

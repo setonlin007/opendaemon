@@ -152,6 +152,7 @@ install_macos() {
   # Directories & config
   mkdir -p data mcp/data
   generate_config
+  init_workspace
 
   # Proxy
   setup_proxy "$HOME"
@@ -264,6 +265,7 @@ install_linux() {
   # Directories & config
   mkdir -p data mcp/data
   generate_config
+  init_workspace
 
   # Fix ownership
   chown -R "$RUN_USER":"$RUN_USER" /home/"$RUN_USER"
@@ -292,6 +294,52 @@ install_linux() {
 # ══════════════════════════════════════
 #  Shared functions
 # ══════════════════════════════════════
+init_workspace() {
+  local WS_HOME
+  if [ "$PLATFORM" = "macos" ]; then
+    WS_HOME="$HOME/workspace"
+  else
+    WS_HOME="/home/$RUN_USER/workspace"
+  fi
+
+  if [ -d "$WS_HOME" ]; then
+    log "Workspace already exists at $WS_HOME"
+    return
+  fi
+
+  info "Initializing workspace..."
+  mkdir -p "$WS_HOME/projects" "$WS_HOME/artifacts"
+
+  # Move project into workspace/projects if not already there
+  local PROJECT_NAME
+  PROJECT_NAME=$(basename "$INSTALL_DIR")
+  if [ ! -d "$WS_HOME/projects/$PROJECT_NAME" ]; then
+    mv "$INSTALL_DIR" "$WS_HOME/projects/$PROJECT_NAME"
+    ln -s "$WS_HOME/projects/$PROJECT_NAME" "$INSTALL_DIR"
+  fi
+
+  # Create .workspace.json
+  cat > "$WS_HOME/.workspace.json" << WSJSON
+{
+  "version": 1,
+  "projects": {
+    "$PROJECT_NAME": {
+      "path": "projects/$PROJECT_NAME",
+      "type": "node",
+      "description": "OpenDaemon agent platform"
+    }
+  },
+  "artifacts_path": "artifacts"
+}
+WSJSON
+
+  if [ "$PLATFORM" != "macos" ]; then
+    chown -R "$RUN_USER":"$RUN_USER" "$WS_HOME"
+  fi
+
+  log "Workspace initialized at $WS_HOME"
+}
+
 generate_config() {
   if [ ! -f "config.json" ]; then
     cat > config.json << CONF
