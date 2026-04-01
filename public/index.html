@@ -2906,7 +2906,7 @@ messagesEl.addEventListener('scroll', () => {
   if (isAutoScrolling) return; // ignore programmatic / DOM-mutation scrolls
   const distFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
   if (distFromBottom > 150) {
-    if (!userScrolledUp && isStreaming) {
+    if (!userScrolledUp) {
       userScrolledUp = true;
       $('scrollBottomBtn').classList.add('visible');
     }
