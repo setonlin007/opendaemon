@@ -270,6 +270,41 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Access Link (auto-login via temporary token, before auth check) ──
+
+  if (method === "GET" && path === "/access") {
+    try {
+      const urlObj = new URL(req.url, `http://${req.headers.host}`);
+      const accessToken = urlObj.searchParams.get("token");
+      if (!accessToken) {
+        res.writeHead(302, { Location: "/login.html" });
+        res.end();
+        return;
+      }
+      const sessionToken = auth.consumeAccessLink(accessToken, req);
+      if (!sessionToken) {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>链接已失效</title>
+          <style>body{font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0a0a0a;color:#e0e0e0;}
+          .box{text-align:center;padding:2rem;border-radius:12px;background:#1a1a1a;border:1px solid #333;}
+          h2{margin:0 0 .5rem;color:#ff6b6b;}p{color:#999;margin:0;}a{color:#64b5f6;}</style></head>
+          <body><div class="box"><h2>链接已失效</h2><p>该访问链接已过期或已使用。</p><p style="margin-top:1rem"><a href="/login.html">前往登录页</a></p></div></body></html>`);
+        return;
+      }
+      // Set session cookie and redirect to main page
+      const isSecure = req.headers["x-forwarded-proto"] === "https" || req.connection?.encrypted;
+      const securePart = isSecure ? " Secure;" : "";
+      res.writeHead(302, {
+        "Set-Cookie": `od_session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax;${securePart} Max-Age=${30 * 24 * 60 * 60}`,
+        Location: "/",
+      });
+      res.end();
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
   // Auth check (returns false and sends response if not authed)
   if (!needsSetup() && !auth.requireAuth(req, res)) return;
 
@@ -303,6 +338,72 @@ const server = http.createServer(async (req, res) => {
       json(res, { url: getTunnelUrl() });
     } catch {
       json(res, { url: null });
+    }
+    return;
+  }
+
+  // ── Access Link Management ──
+
+  if (method === "POST" && path === "/api/access-link") {
+    try {
+      const body = await readBody(req);
+      const expiresIn = Math.min(Math.max(body?.expiresIn || 24, 0.5), 720); // 0.5h ~ 30 days
+      const maxUses = Math.min(Math.max(body?.maxUses ?? 1, 0), 100); // 0=unlimited, max 100
+      const label = (body?.label || "").slice(0, 100);
+
+      const { token, expires } = auth.createAccessLink({ expiresIn, maxUses, label });
+
+      // Auto-start tunnel if not already running
+      let tunnelUrl = null;
+      try {
+        const tunnel = await import("./lib/tunnel.mjs");
+        tunnelUrl = tunnel.getTunnelUrl();
+        if (!tunnelUrl) {
+          tunnelUrl = await tunnel.startTunnel(PORT);
+        }
+      } catch (err) {
+        console.error("[access-link] tunnel error:", err.message);
+      }
+
+      // Build the access URL
+      const baseUrl = tunnelUrl || `http://${req.headers.host}`;
+      const accessUrl = `${baseUrl}/access?token=${token}`;
+
+      json(res, {
+        ok: true,
+        accessUrl,
+        tunnelUrl,
+        token,
+        expires,
+        expiresIn,
+        maxUses,
+      });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "GET" && path === "/api/access-links") {
+    try {
+      json(res, { links: auth.listAccessLinks() });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "DELETE" && path.startsWith("/api/access-links/")) {
+    try {
+      const token = extractParam(req.url, "/api/access-links/");
+      if (!token) {
+        json(res, { error: "token required" }, 400);
+        return;
+      }
+      const deleted = auth.revokeAccessLink(token);
+      json(res, { ok: true, deleted });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
     }
     return;
   }

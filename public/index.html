@@ -471,6 +471,42 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .eng-test-status.fail { color: #f87171; }
 .eng-test-status.loading { color: var(--text-3); }
 
+/* ── Access Link Panel ── */
+.access-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; backdrop-filter: blur(2px); }
+.access-overlay.open { display: flex; align-items: center; justify-content: center; }
+.access-panel { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 12px; width: 90vw; max-width: 560px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; }
+.access-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.access-header h2 { font-size: 16px; font-weight: 700; margin: 0; }
+.access-body { flex: 1; overflow-y: auto; padding: 20px; }
+.access-gen-btn { width: 100%; padding: 12px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; margin-bottom: 16px; }
+.access-gen-btn:hover { opacity: 0.9; }
+.access-gen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.access-options { display: flex; gap: 12px; margin-bottom: 16px; }
+.access-options .eng-field { flex: 1; }
+.access-options label { display: block; font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+.access-options select, .access-options input { width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; box-sizing: border-box; }
+.access-result { background: var(--input-bg); border: 1px solid var(--accent); border-radius: 8px; padding: 14px; margin-bottom: 16px; }
+.access-result-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.access-result-url { font-size: 13px; word-break: break-all; color: var(--accent); cursor: pointer; user-select: all; line-height: 1.5; }
+.access-result-url:hover { text-decoration: underline; }
+.access-result-meta { font-size: 11px; color: var(--text-3); margin-top: 8px; }
+.access-result-actions { display: flex; gap: 8px; margin-top: 10px; }
+.access-result-actions button { padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: none; color: var(--text-2); transition: all 0.15s; }
+.access-result-actions button:hover { background: var(--hover); color: var(--text); }
+.access-result-actions .copy-ok { color: #4ade80; border-color: #4ade80; }
+.access-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.access-links-title { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+.access-link-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+.access-link-item .al-info { flex: 1; min-width: 0; }
+.access-link-item .al-token { font-family: monospace; color: var(--text-2); }
+.access-link-item .al-meta { color: var(--text-3); font-size: 11px; }
+.access-link-item .al-revoke { background: none; border: 1px solid #f87171; color: #f87171; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; flex-shrink: 0; }
+.access-link-item .al-revoke:hover { background: #f87171; color: #fff; }
+.access-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); margin-bottom: 12px; }
+.access-status .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.access-status .dot.on { background: #4ade80; }
+.access-status .dot.off { background: #f87171; }
+
 /* Chat header engine switcher */
 .chat-engine-switcher { position: relative; cursor: pointer; }
 .chat-engine-switcher:hover .engine-label { color: var(--accent); }
@@ -1822,6 +1858,12 @@ return He}()
       </span>
       <span class="footer-label" data-i18n="memory">Memory</span>
     </button>
+    <button class="footer-btn" onclick="openAccessPanel()" title="Access Link">
+      <span class="footer-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      </span>
+      <span class="footer-label" data-i18n="accessLink">Access</span>
+    </button>
     <button class="footer-btn lang-btn" onclick="I18N.toggleLocale()" title="Switch Language">
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -1967,6 +2009,19 @@ return He}()
       <div class="evo-tab" onclick="switchEvoTab('tools',this)"><span data-i18n="tools">Tools</span> <span id="toolsBadge"></span></div>
     </div>
     <div class="evo-body" id="evoBody"></div>
+  </div>
+</div>
+
+<!-- Access Link Panel -->
+<div class="access-overlay" id="accessOverlay" onclick="if(event.target===this)closeAccessPanel()">
+  <div class="access-panel">
+    <div class="access-header">
+      <h2>🔗 Access Link</h2>
+      <button class="evo-close" onclick="closeAccessPanel()">&times;</button>
+    </div>
+    <div class="access-body" id="accessBody">
+      <!-- Rendered by JS -->
+    </div>
   </div>
 </div>
 
@@ -4515,6 +4570,172 @@ const ENGINE_PRESETS = {
   ],
   agentic: []
 };
+
+// ── Access Link Panel ──
+
+function openAccessPanel() {
+  $('accessOverlay').classList.add('open');
+  renderAccessPanel();
+}
+function closeAccessPanel() {
+  $('accessOverlay').classList.remove('open');
+}
+
+let _lastAccessResult = null;
+
+async function renderAccessPanel() {
+  const body = $('accessBody');
+  body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-3)">Loading...</div>';
+
+  try {
+    // Fetch tunnel status and existing links in parallel
+    const [tunnelRes, linksRes] = await Promise.all([
+      api('GET', '/api/tunnel').catch(() => ({ url: null })),
+      api('GET', '/api/access-links').catch(() => ({ links: [] })),
+    ]);
+
+    const tunnelUrl = tunnelRes.url;
+    const links = linksRes.links || [];
+
+    let html = '';
+
+    // Tunnel status
+    html += `<div class="access-status">
+      <span class="dot ${tunnelUrl ? 'on' : 'off'}"></span>
+      ${tunnelUrl ? `Tunnel: <a href="${esc(tunnelUrl)}" target="_blank" style="color:var(--accent);text-decoration:none">${esc(tunnelUrl)}</a>` : 'Tunnel 未启动 (生成链接时自动启动)'}
+    </div>`;
+
+    // Options
+    html += `<div class="access-options">
+      <div class="eng-field">
+        <label>有效期</label>
+        <select id="accessExpiry">
+          <option value="1">1 小时</option>
+          <option value="6">6 小时</option>
+          <option value="24" selected>24 小时</option>
+          <option value="72">3 天</option>
+          <option value="168">7 天</option>
+          <option value="720">30 天</option>
+        </select>
+      </div>
+      <div class="eng-field">
+        <label>使用次数</label>
+        <select id="accessMaxUses">
+          <option value="1" selected>仅 1 次</option>
+          <option value="3">3 次</option>
+          <option value="10">10 次</option>
+          <option value="0">不限</option>
+        </select>
+      </div>
+    </div>`;
+
+    // Generate button
+    html += `<button class="access-gen-btn" id="accessGenBtn" onclick="generateAccessLink()">一键生成访问链接</button>`;
+
+    // Last generated result
+    if (_lastAccessResult) {
+      html += renderAccessResult(_lastAccessResult);
+    }
+
+    // Existing links
+    if (links.length > 0) {
+      html += `<hr class="access-divider">`;
+      html += `<div class="access-links-title">活跃链接 (${links.length})</div>`;
+      for (const link of links) {
+        const expiresIn = Math.max(0, Math.round((link.expires - Date.now()) / 3600000));
+        const usesText = link.maxUses === 0 ? `已用 ${link.used} 次` : `${link.used}/${link.maxUses} 次`;
+        html += `<div class="access-link-item">
+          <div class="al-info">
+            <div class="al-token">${esc(link.token)}</div>
+            <div class="al-meta">${usesText} · ${expiresIn > 0 ? expiresIn + 'h 后过期' : '即将过期'}</div>
+          </div>
+          <button class="al-revoke" onclick="revokeAccessLink('${esc(link.tokenFull)}')">撤销</button>
+        </div>`;
+      }
+    }
+
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = `<div style="color:#f87171;text-align:center;padding:20px">${esc(err.message)}</div>`;
+  }
+}
+
+function renderAccessResult(result) {
+  return `<div class="access-result">
+    <div class="access-result-label">访问链接 (点击复制)</div>
+    <div class="access-result-url" onclick="copyAccessUrl(this)" title="点击复制">${esc(result.accessUrl)}</div>
+    <div class="access-result-meta">
+      有效期 ${result.expiresIn} 小时 · ${result.maxUses === 0 ? '不限次数' : '可用 ' + result.maxUses + ' 次'}
+      ${result.tunnelUrl ? ' · via Cloudflare Tunnel' : ' · 仅局域网'}
+    </div>
+    <div class="access-result-actions">
+      <button onclick="copyAccessUrl(this.parentElement.parentElement.querySelector('.access-result-url'))">复制链接</button>
+      <button onclick="generateQR('${esc(result.accessUrl)}')">生成二维码</button>
+    </div>
+  </div>`;
+}
+
+async function generateAccessLink() {
+  const btn = $('accessGenBtn');
+  try {
+    btn.disabled = true;
+    btn.textContent = '生成中... (首次启动 Tunnel 可能需 10-20 秒)';
+
+    const expiresIn = parseFloat($('accessExpiry').value);
+    const maxUses = parseInt($('accessMaxUses').value);
+
+    const result = await api('POST', '/api/access-link', { expiresIn, maxUses });
+    _lastAccessResult = result;
+    renderAccessPanel();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = '一键生成访问链接';
+    alert('生成失败: ' + err.message);
+  }
+}
+
+function copyAccessUrl(el) {
+  try {
+    const url = el.textContent;
+    navigator.clipboard.writeText(url);
+    el.style.color = '#4ade80';
+    setTimeout(() => { el.style.color = ''; }, 1500);
+  } catch (err) {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = el.textContent;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    el.style.color = '#4ade80';
+    setTimeout(() => { el.style.color = ''; }, 1500);
+  }
+}
+
+function generateQR(url) {
+  // Use a simple QR code API
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  overlay.onclick = () => overlay.remove();
+  overlay.innerHTML = `<div style="background:var(--sidebar-bg);border-radius:12px;padding:24px;text-align:center;" onclick="event.stopPropagation()">
+    <img src="${qrUrl}" alt="QR Code" style="border-radius:8px;width:240px;height:240px;">
+    <p style="font-size:12px;color:var(--text-3);margin:12px 0 0;">扫码访问 OpenDaemon</p>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function revokeAccessLink(token) {
+  try {
+    await api('DELETE', `/api/access-links/${token}`);
+    renderAccessPanel();
+  } catch (err) {
+    alert('撤销失败: ' + err.message);
+  }
+}
+
+// ── Engine Management ──
 
 function openEnginesPanel() {
   $('engOverlay').classList.add('open');
