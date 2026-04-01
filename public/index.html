@@ -29,6 +29,44 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 /* ── Sidebar ── */
 .sidebar { width: 260px; min-width: 260px; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 .sidebar-header { padding: 14px 16px 10px; display: flex; align-items: center; gap: 10px; }
+
+/* Workspace selector */
+.ws-selector { padding: 4px 12px 6px; }
+.ws-selector-btn { width: 100%; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+.ws-selector-btn:hover { border-color: var(--accent); color: var(--text); }
+.ws-selector-btn .ws-icon { font-size: 13px; flex-shrink: 0; }
+.ws-selector-btn .ws-name { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.ws-selector-btn .ws-arrow { font-size: 10px; flex-shrink: 0; color: var(--text-3); }
+.ws-popover { display: none; position: absolute; left: 12px; right: 12px; top: 100%; margin-top: 4px; background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 10px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 60; max-height: 300px; overflow-y: auto; }
+.ws-popover.open { display: block; }
+.ws-popover-item { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 8px; transition: background 0.1s; }
+.ws-popover-item:hover { background: var(--hover); color: var(--text); }
+.ws-popover-item.active { background: var(--active); color: var(--text); }
+.ws-popover-item .ws-item-name { flex: 1; font-weight: 500; }
+.ws-popover-item .ws-item-path { font-size: 10px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+.ws-popover-item .ws-item-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.1s; }
+.ws-popover-item:hover .ws-item-actions { opacity: 1; }
+.ws-popover-item .ws-item-action { width: 20px; height: 20px; border: none; background: none; cursor: pointer; color: var(--text-3); border-radius: 4px; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+.ws-popover-item .ws-item-action:hover { color: var(--accent); background: rgba(233,69,96,0.1); }
+.ws-popover-divider { height: 1px; background: var(--border); margin: 4px 0; }
+.ws-popover-add { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+.ws-popover-add:hover { background: rgba(233,69,96,0.08); }
+
+/* Workspace dialog */
+.ws-dialog-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; align-items: center; justify-content: center; }
+.ws-dialog-overlay.open { display: flex; }
+.ws-dialog { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: 90vw; max-width: 400px; }
+.ws-dialog h3 { font-size: 15px; margin-bottom: 14px; color: var(--text); }
+.ws-dialog label { font-size: 12px; color: var(--text-2); display: block; margin-bottom: 4px; margin-top: 10px; }
+.ws-dialog input { width: 100%; padding: 8px 10px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; outline: none; }
+.ws-dialog input:focus { border-color: var(--accent); }
+.ws-dialog .ws-dialog-btns { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+.ws-dialog .ws-dialog-btns button { padding: 7px 16px; border-radius: 8px; font-size: 12px; cursor: pointer; border: none; }
+.ws-dialog .ws-dialog-btns .ws-btn-cancel { background: var(--hover); color: var(--text-2); }
+.ws-dialog .ws-dialog-btns .ws-btn-ok { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; font-weight: 600; }
+
+/* Workspace indicator in chat header */
+.ws-indicator { font-size: 11px; color: var(--text-3); background: var(--hover); padding: 2px 8px; border-radius: 6px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-header h1 { font-size: 15px; font-weight: 700; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; flex: 1; cursor: pointer; }
 .sidebar-header .sb-icon-btn { width: 30px; height: 30px; background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; transition: all 0.15s; }
 .sidebar-header .sb-icon-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(233,69,96,0.08); }
@@ -1821,6 +1859,14 @@ return He}()
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
   </div>
+  <div class="ws-selector" style="position:relative;">
+    <button class="ws-selector-btn" id="wsSelectorBtn" onclick="toggleWsPopover()">
+      <span class="ws-icon">📁</span>
+      <span class="ws-name" id="wsName">workspace</span>
+      <span class="ws-arrow">▾</span>
+    </button>
+    <div class="ws-popover" id="wsPopover"></div>
+  </div>
   <div class="new-chat-wrap">
     <div class="new-chat-bar">
       <button class="new-chat-btn" onclick="newChat()">
@@ -1893,7 +1939,10 @@ return He}()
       </div>
       <span class="session-info" id="sessionInfo"></span>
     </div>
-    <span class="status" id="statusBadge" data-i18n="ready">Ready</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="ws-indicator" id="wsIndicator" title=""></span>
+      <span class="status" id="statusBadge" data-i18n="ready">Ready</span>
+    </div>
   </div>
   <div class="rate-limit-banner" id="rateLimitBanner"></div>
   <div class="messages-wrap">
@@ -2032,6 +2081,8 @@ let engines = [];
 let conversations = [];
 let currentConvId = null;
 let currentEngine = null;
+let workspaces = [];
+let currentWorkspaceId = localStorage.getItem('currentWorkspaceId') || 'default';
 let isStreaming = false;
 let streamingConvId = null; // track which conversation is streaming
 let streamingGeneration = 0; // generation counter to prevent race conditions
@@ -2054,10 +2105,18 @@ const autocompleteEl = $('autocomplete');
 // ── Init ──
 async function init() {
   try {
-    const data = await api('GET', '/api/init');
+    const [data, wsData] = await Promise.all([
+      api('GET', '/api/init'),
+      api('GET', '/api/workspaces'),
+    ]);
     engines = data.engines || [];
-    conversations = data.conversations || [];
+    workspaces = wsData || [];
     window._serverBoot = data.server_boot || null;
+    // Validate currentWorkspaceId
+    if (!workspaces.find(w => w.id === currentWorkspaceId)) currentWorkspaceId = 'default';
+    // Load conversations for current workspace
+    conversations = await api('GET', `/api/conversations?workspace_id=${currentWorkspaceId}`);
+    renderWsSelector();
     engineSelect.innerHTML = engines.map(e =>
       `<option value="${e.id}">${e.icon ? e.icon + ' ' : ''}${e.label}</option>`
     ).join('');
@@ -2100,7 +2159,7 @@ async function api(method, path, body) {
 
 // ── Conversations ──
 async function loadConversations() {
-  conversations = await api('GET', '/api/conversations');
+  conversations = await api('GET', `/api/conversations?workspace_id=${currentWorkspaceId}`);
   renderConversations();
 }
 
@@ -2242,7 +2301,7 @@ async function ctxDeleteConv() {
 async function newChat() {
   const engineId = engineSelect.value || (engines[0] && engines[0].id) || "claude-opus";
   $('enginePicker').classList.remove('open');
-  const conv = await api('POST', '/api/conversations', { engine_id: engineId });
+  const conv = await api('POST', '/api/conversations', { engine_id: engineId, workspace_id: currentWorkspaceId });
   conversations.unshift(conv);
   renderConversations();
   selectConversation(conv.id);
@@ -5402,9 +5461,163 @@ window.addEventListener('popstate', (e) => {
   history.pushState({ app: true }, '');
 });
 
+// ── Workspace Management ──
+
+function renderWsSelector() {
+  const ws = workspaces.find(w => w.id === currentWorkspaceId) || workspaces[0];
+  if (ws) {
+    $('wsName').textContent = ws.name;
+    $('wsIndicator').textContent = ws.path;
+    $('wsIndicator').title = ws.path;
+  }
+}
+
+function toggleWsPopover() {
+  const pop = $('wsPopover');
+  const isOpen = pop.classList.toggle('open');
+  if (isOpen) renderWsPopover();
+}
+
+function renderWsPopover() {
+  let html = '';
+  for (const ws of workspaces) {
+    const active = ws.id === currentWorkspaceId ? ' active' : '';
+    const isDefault = ws.is_default ? '' : `<span class="ws-item-actions">
+      <button class="ws-item-action" onclick="event.stopPropagation();editWorkspace('${ws.id}')" title="Edit">✎</button>
+      <button class="ws-item-action" onclick="event.stopPropagation();deleteWorkspace('${ws.id}')" title="Delete">✕</button>
+    </span>`;
+    html += `<div class="ws-popover-item${active}" onclick="switchWorkspace('${ws.id}')">
+      <span>📁</span>
+      <span class="ws-item-name">${esc(ws.name)}</span>
+      <span class="ws-item-path" title="${esc(ws.path)}">${esc(ws.path)}</span>
+      ${isDefault}
+    </div>`;
+  }
+  html += '<div class="ws-popover-divider"></div>';
+  html += `<div class="ws-popover-add" onclick="openWsDialog()">
+    <span>+</span>
+    <span>New Workspace</span>
+  </div>`;
+  $('wsPopover').innerHTML = html;
+}
+
+async function switchWorkspace(id) {
+  if (id === currentWorkspaceId) { $('wsPopover').classList.remove('open'); return; }
+  currentWorkspaceId = id;
+  localStorage.setItem('currentWorkspaceId', id);
+  $('wsPopover').classList.remove('open');
+  renderWsSelector();
+  currentConvId = null;
+  messagesEl.innerHTML = '<div class="welcome" data-i18n="welcomeMsg">Select or create a conversation to start</div>';
+  inputEl.disabled = true;
+  sendBtn.disabled = true;
+  await loadConversations();
+  if (conversations.length > 0) {
+    selectConversation(conversations[0].id);
+  }
+}
+
+let wsDialogMode = 'create';
+let wsDialogEditId = null;
+
+function openWsDialog(editId) {
+  $('wsPopover').classList.remove('open');
+  wsDialogMode = editId ? 'edit' : 'create';
+  wsDialogEditId = editId || null;
+  $('wsDialogTitle').textContent = editId ? 'Edit Workspace' : 'New Workspace';
+  $('wsDialogOk').textContent = editId ? 'Save' : 'Create';
+  if (editId) {
+    const ws = workspaces.find(w => w.id === editId);
+    $('wsDialogName').value = ws?.name || '';
+    $('wsDialogPath').value = ws?.path || '';
+  } else {
+    $('wsDialogName').value = '';
+    $('wsDialogPath').value = '';
+  }
+  $('wsDialogOverlay').classList.add('open');
+  $('wsDialogName').focus();
+}
+
+function closeWsDialog() {
+  $('wsDialogOverlay').classList.remove('open');
+}
+
+async function submitWsDialog() {
+  const name = $('wsDialogName').value.trim();
+  const path = $('wsDialogPath').value.trim();
+  if (!name || !path) return;
+  try {
+    if (wsDialogMode === 'edit') {
+      await api('PATCH', `/api/workspaces/${wsDialogEditId}`, { name, path });
+    } else {
+      const ws = await api('POST', '/api/workspaces', { name, path });
+      currentWorkspaceId = ws.id;
+      localStorage.setItem('currentWorkspaceId', ws.id);
+    }
+    workspaces = await api('GET', '/api/workspaces');
+    renderWsSelector();
+    closeWsDialog();
+    if (wsDialogMode === 'create') {
+      currentConvId = null;
+      messagesEl.innerHTML = '<div class="welcome" data-i18n="welcomeMsg">Select or create a conversation to start</div>';
+      await loadConversations();
+    }
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function editWorkspace(id) {
+  $('wsPopover').classList.remove('open');
+  openWsDialog(id);
+}
+
+async function deleteWorkspace(id) {
+  const ws = workspaces.find(w => w.id === id);
+  if (!ws || ws.is_default) return;
+  if (!confirm(`Delete workspace "${ws.name}"? Conversations will be moved to the default workspace.`)) return;
+  try {
+    await api('DELETE', `/api/workspaces/${id}`);
+    workspaces = await api('GET', '/api/workspaces');
+    if (currentWorkspaceId === id) {
+      currentWorkspaceId = 'default';
+      localStorage.setItem('currentWorkspaceId', 'default');
+    }
+    renderWsSelector();
+    $('wsPopover').classList.remove('open');
+    await loadConversations();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// Close workspace popover on outside click
+document.addEventListener('click', (e) => {
+  const pop = $('wsPopover');
+  const btn = $('wsSelectorBtn');
+  if (pop.classList.contains('open') && !pop.contains(e.target) && !btn.contains(e.target)) {
+    pop.classList.remove('open');
+  }
+});
+
 // ── Start ──
 I18N.translatePage();
 init();
 </script>
+
+<!-- Workspace Dialog -->
+<div class="ws-dialog-overlay" id="wsDialogOverlay" onclick="if(event.target===this)closeWsDialog()">
+  <div class="ws-dialog">
+    <h3 id="wsDialogTitle">New Workspace</h3>
+    <label>Name</label>
+    <input id="wsDialogName" placeholder="e.g. My Project">
+    <label>Path</label>
+    <input id="wsDialogPath" placeholder="e.g. /home/user/projects/myapp">
+    <div class="ws-dialog-btns">
+      <button class="ws-btn-cancel" onclick="closeWsDialog()">Cancel</button>
+      <button class="ws-btn-ok" id="wsDialogOk" onclick="submitWsDialog()">Create</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

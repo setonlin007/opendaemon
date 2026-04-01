@@ -72,6 +72,7 @@ export async function handleChat(conv, engine, prompt, onEvent, abortSignal, inj
       mcpServers,
       engineConfig: engine,
       injectedContext,
+      cwd: conv.workspace_path,
       onEvent: wrappedOnEvent,
       abortSignal,
     }));

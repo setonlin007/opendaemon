@@ -9,7 +9,7 @@ import { execSync, exec } from "child_process";
 import { homedir } from "os";
 
 import { loadConfig, getEngineById, getEngines, getEngineFullConfig, saveEngines, mergeEngineUpdate, needsSetup, createInitialConfig } from "./lib/config.mjs";
-import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
+import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession, createWorkspace, listWorkspaces, getWorkspace, updateWorkspace, deleteWorkspace } from "./lib/db.mjs";
 import { createAuth } from "./lib/auth.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
 import { BUILTIN_TOOL_DEFINITIONS, BUILTIN_TOOL_NAMES, executeBuiltinTool } from "./lib/builtin-tools.mjs";
@@ -626,10 +626,59 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Workspace routes ──
+
+  if (method === "GET" && path === "/api/workspaces") {
+    try {
+      json(res, listWorkspaces(), 200, req);
+    } catch (err) { json(res, { error: err.message }, 500); }
+    return;
+  }
+
+  if (method === "POST" && path === "/api/workspaces") {
+    try {
+      const body = await readBody(req);
+      if (!body?.name || !body?.path) { json(res, { error: "name and path required" }, 400); return; }
+      // Validate path
+      const wsPath = body.path.startsWith("~") ? body.path.replace("~", homedir()) : body.path;
+      if (!existsSync(wsPath)) { json(res, { error: "path does not exist" }, 400); return; }
+      if (!statSync(wsPath).isDirectory()) { json(res, { error: "path is not a directory" }, 400); return; }
+      json(res, createWorkspace(body.name, body.path));
+    } catch (err) { json(res, { error: err.message }, 500); }
+    return;
+  }
+
+  if (method === "PATCH" && path.startsWith("/api/workspaces/")) {
+    try {
+      const id = extractParam(req.url, "/api/workspaces/");
+      if (!id) { json(res, { error: "id required" }, 400); return; }
+      const body = await readBody(req);
+      if (body.path) {
+        const wsPath = body.path.startsWith("~") ? body.path.replace("~", homedir()) : body.path;
+        if (!existsSync(wsPath)) { json(res, { error: "path does not exist" }, 400); return; }
+        if (!statSync(wsPath).isDirectory()) { json(res, { error: "path is not a directory" }, 400); return; }
+      }
+      json(res, updateWorkspace(id, body));
+    } catch (err) { json(res, { error: err.message }, 500); }
+    return;
+  }
+
+  if (method === "DELETE" && path.startsWith("/api/workspaces/")) {
+    try {
+      const id = extractParam(req.url, "/api/workspaces/");
+      if (!id) { json(res, { error: "id required" }, 400); return; }
+      deleteWorkspace(id);
+      json(res, { ok: true });
+    } catch (err) { json(res, { error: err.message }, 500); }
+    return;
+  }
+
   // ── Conversation routes ──
 
   if (method === "GET" && path === "/api/conversations") {
-    json(res, listConversations(), 200, req);
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const workspaceId = url.searchParams.get("workspace_id");
+    json(res, listConversations(workspaceId || undefined), 200, req);
     return;
   }
 
@@ -638,7 +687,7 @@ const server = http.createServer(async (req, res) => {
     if (!body?.engine_id) { json(res, { error: "engine_id required" }, 400); return; }
     const engine = getEngineById(body.engine_id);
     if (!engine) { json(res, { error: "unknown engine" }, 400); return; }
-    json(res, createConversation(body.engine_id));
+    json(res, createConversation(body.engine_id, body.workspace_id || "default"));
     return;
   }
 
@@ -961,6 +1010,14 @@ const server = http.createServer(async (req, res) => {
     console.log(`[chat] ${conv.id} engine=${conv.engine_id} attachments=${attachments.length} prompt="${promptText.substring(0, 50)}"`);
 
     try {
+      // Resolve workspace path for this conversation
+      if (conv.workspace_id) {
+        const ws = getWorkspace(conv.workspace_id);
+        if (ws) {
+          conv.workspace_path = ws.path.startsWith("~") ? ws.path.replace("~", homedir()) : ws.path;
+        }
+      }
+
       const handler = getEngineHandler(engine.type);
       if (handler) {
         const result = await handler.handleChat(conv, engine, promptText, onEvent, abortController.signal, injection.context, attachments, serverDeps);
@@ -1468,7 +1525,7 @@ async function handleOpenAIChat(conv, engine, prompt, onEvent, abortSignal, inje
   // Unified tool dispatcher: built-in tools handled locally, others via MCP
   const onToolCall = async (name, args) => {
     if (BUILTIN_TOOL_NAMES.has(name)) {
-      return await executeBuiltinTool(name, args);
+      return await executeBuiltinTool(name, args, { cwd: conv.workspace_path });
     }
     if (mcpOnToolCall) {
       return await mcpOnToolCall(name, args);
