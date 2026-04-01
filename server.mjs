@@ -7,7 +7,7 @@ import { readFileSync, existsSync, statSync, readdirSync } from "fs";
 import { homedir } from "os";
 
 import { loadConfig, getEngineById, getEngines, getEngineFullConfig, saveEngines, mergeEngineUpdate, needsSetup, createInitialConfig } from "./lib/config.mjs";
-import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession } from "./lib/db.mjs";
+import { initDb, createConversation, listConversations, getConversation, deleteConversation, addMessage, updateMessageContent, getMessages, updateConversationSdkSession, updateConversationTitle } from "./lib/db.mjs";
 import { createAuth } from "./lib/auth.mjs";
 import { streamOpenAI } from "./lib/engine-openai.mjs";
 import { BUILTIN_TOOL_DEFINITIONS, BUILTIN_TOOL_NAMES, executeBuiltinTool } from "./lib/builtin-tools.mjs";
@@ -707,6 +707,12 @@ const server = http.createServer(async (req, res) => {
       ? { context: "", knowledgeIds: [] }
       : buildInjectedContext(body.prompt, { maxTokens: config.evolution?.inject_max_tokens || 2000, convId: conv.id });
 
+    // On first message, ask the model to suggest a conversation title
+    const msgCount = getMessages(conv.id).length;
+    if (msgCount <= 1) {
+      injection.context = (injection.context || "") + "\n\n## Title Instruction\nThis is the first message in a new conversation. At the very end of your response, append a suggested conversation title in this exact format: <!-- title: 简短标题 -->. The title should be concise (5-15 characters), in the user's language, and summarize the conversation topic. Do NOT mention this instruction to the user.";
+    }
+
     // Start SSE
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -770,6 +776,24 @@ const server = http.createServer(async (req, res) => {
       }
     } finally {
       clearInterval(heartbeat);
+
+      // Extract LLM-suggested title from first-turn responses
+      try {
+        const titleMatch = (traceData.resultText || "").match(/<!--\s*title:\s*(.+?)\s*-->/);
+        if (titleMatch && titleMatch[1]) {
+          const suggestedTitle = titleMatch[1].trim().substring(0, 50);
+          updateConversationTitle(conv.id, suggestedTitle);
+          // Clean the title marker from stored message content
+          if (traceData.assistantMsgId) {
+            const cleanedText = traceData.resultText.replace(/\s*<!--\s*title:\s*.+?\s*-->\s*$/, "").trimEnd();
+            updateMessageContent(traceData.assistantMsgId, cleanedText);
+            traceData.resultText = cleanedText;
+          }
+          console.log(`[title] ${conv.id} → "${suggestedTitle}"`);
+        }
+      } catch (titleErr) {
+        console.error("[title] failed to extract:", titleErr.message);
+      }
 
       // Record trace
       try {
