@@ -2,7 +2,8 @@
 # ──────────────────────────────────────────────────────
 # OpenDaemon Installer — macOS / Linux / WSL
 # One-line install:
-#   curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/setonlin007/opendaemon/main/install.sh | sudo bash
+# Installs as the calling user (SUDO_USER), not root.
 #
 # Options (env vars):
 #   PROXY_URL=http://host:port  — set HTTP/HTTPS proxy
@@ -52,14 +53,21 @@ BRANCH="${BRANCH:-main}"
 PROXY_URL="${PROXY_URL:-}"
 PORT=3456
 
-# Platform-specific defaults
+# Platform-specific defaults — always use current user
+CURRENT_USER="$(whoami)"
 if [ "$PLATFORM" = "macos" ]; then
-  CURRENT_USER="$(whoami)"
   INSTALL_DIR="${INSTALL_DIR:-$HOME/opendaemon}"
   RUN_USER="$CURRENT_USER"
 else
-  RUN_USER="opendaemon"
-  INSTALL_DIR="${INSTALL_DIR:-/home/opendaemon/opendaemon}"
+  # Use the calling user (via SUDO_USER if available, else whoami)
+  if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    RUN_USER="$SUDO_USER"
+    RUN_HOME=$(eval echo "~$SUDO_USER")
+  else
+    RUN_USER="$CURRENT_USER"
+    RUN_HOME="$HOME"
+  fi
+  INSTALL_DIR="${INSTALL_DIR:-$RUN_HOME/opendaemon}"
 fi
 
 echo ""
@@ -187,12 +195,14 @@ install_macos() {
 # ══════════════════════════════════════
 install_linux() {
   if [ "$(id -u)" -ne 0 ]; then
-    err "Please run as root:  sudo bash install.sh"
+    err "Please run as root:  curl ... | sudo bash"
   fi
 
   if [ "$PLATFORM" = "wsl" ]; then
     log "WSL detected — installing as Linux"
   fi
+
+  log "Installing as user: $RUN_USER"
 
   # Detect distro
   PKG_MGR="apt"
@@ -203,14 +213,6 @@ install_linux() {
       centos|rhel|rocky|alma|fedora) PKG_MGR="yum" ;;
       *) warn "Unknown distro: $ID — trying apt..." ;;
     esac
-  fi
-
-  # Create user
-  if ! id "$RUN_USER" &>/dev/null; then
-    useradd -m -s /bin/bash "$RUN_USER"
-    log "Created user: $RUN_USER"
-  else
-    log "User $RUN_USER already exists"
   fi
 
   # System packages
@@ -251,12 +253,13 @@ install_linux() {
     IS_UPDATE=true
     info "Existing install detected, updating..."
     cd "$REAL_DIR"
-    su - "$RUN_USER" -c "cd $REAL_DIR && git pull origin $BRANCH"
+    run_as_user "cd $REAL_DIR && git pull origin $BRANCH"
     log "Updated to latest"
   else
     info "Cloning repository..."
     mkdir -p "$(dirname "$INSTALL_DIR")"
     git clone --depth 1 -b "$BRANCH" "$REPO" "$INSTALL_DIR"
+    chown -R "$RUN_USER":"$RUN_USER" "$INSTALL_DIR"
     log "Cloned to $INSTALL_DIR"
   fi
 
@@ -283,10 +286,11 @@ install_linux() {
   init_workspace
 
   # Fix ownership
-  chown -R "$RUN_USER":"$RUN_USER" /home/"$RUN_USER"
+  chown -R "$RUN_USER":"$RUN_USER" "$REAL_DIR"
+  chown -R "$RUN_USER":"$RUN_USER" "$(dirname "$REAL_DIR")"
 
   # Proxy
-  setup_proxy "/home/$RUN_USER"
+  setup_proxy "$RUN_HOME"
 
   # Start / Restart
   PM2_ENV=""
@@ -295,16 +299,16 @@ install_linux() {
   fi
   if [ "$IS_UPDATE" = true ]; then
     info "Restarting OpenDaemon..."
-    su - "$RUN_USER" -c "pm2 restart opendaemon && pm2 save" > /dev/null 2>&1
+    run_as_user "pm2 restart opendaemon && pm2 save" > /dev/null 2>&1
   else
     info "Starting OpenDaemon..."
-    su - "$RUN_USER" -c "pm2 delete opendaemon 2>/dev/null; cd $REAL_DIR && $PM2_ENV pm2 start server.mjs --name opendaemon && pm2 save" > /dev/null 2>&1
+    run_as_user "pm2 delete opendaemon 2>/dev/null; cd $REAL_DIR && $PM2_ENV pm2 start server.mjs --name opendaemon && pm2 save" > /dev/null 2>&1
   fi
   log "OpenDaemon started"
 
   # Auto-start on boot (skip on WSL — no systemd usually)
   if [ "$PLATFORM" != "wsl" ]; then
-    env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u "$RUN_USER" --hp /home/"$RUN_USER" > /dev/null 2>&1 || true
+    env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u "$RUN_USER" --hp "$RUN_HOME" > /dev/null 2>&1 || true
   fi
 
   IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
@@ -314,12 +318,22 @@ install_linux() {
 # ══════════════════════════════════════
 #  Shared functions
 # ══════════════════════════════════════
+
+# Run command as RUN_USER (use su only if current user differs)
+run_as_user() {
+  if [ "$(whoami)" = "$RUN_USER" ]; then
+    bash -c "$1"
+  else
+    su - "$RUN_USER" -c "$1"
+  fi
+}
+
 init_workspace() {
   local WS_HOME
   if [ "$PLATFORM" = "macos" ]; then
     WS_HOME="$HOME/workspace"
   else
-    WS_HOME="/home/$RUN_USER/workspace"
+    WS_HOME="$RUN_HOME/workspace"
   fi
 
   if [ -d "$WS_HOME" ]; then
@@ -393,7 +407,7 @@ setup_proxy() {
   "skipDangerousModePermissionPrompt": true
 }
 SETTINGS
-    if [ "$PLATFORM" != "macos" ]; then
+    if [ "$PLATFORM" != "macos" ] && [ "$(whoami)" != "$RUN_USER" ]; then
       chown -R "$RUN_USER":"$RUN_USER" "$HOME_DIR/.claude"
     fi
     log "Proxy configured: $PROXY_URL"
@@ -412,9 +426,10 @@ show_done() {
   echo -e "  ${CYAN}Config:${NC}    ${INSTALL_DIR}/config.json"
   echo ""
   echo -e "  ${YELLOW}Next steps:${NC}"
-  echo -e "    1. Open ${BOLD}http://${IP}:${PORT}${NC} — setup wizard will guide you"
+  echo -e "    1. Run ${BOLD}claude login${NC} if you haven't already"
+  echo -e "    2. Open ${BOLD}http://${IP}:${PORT}${NC} — setup wizard will guide you"
   if [ "$PLATFORM" != "macos" ]; then
-    echo -e "    2. Open firewall port ${PORT}"
+    echo -e "    3. Open firewall port ${PORT} if needed"
   fi
   echo ""
 }
