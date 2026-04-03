@@ -123,9 +123,7 @@ install_macos() {
   # Global tools
   info "Installing pm2..."
   npm list -g pm2 > /dev/null 2>&1 || npm install -g pm2 2>&1 | tail -1
-  info "Installing claude-code..."
-  npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code 2>&1 | tail -1
-  log "pm2 and claude-code installed"
+  install_or_upgrade_claude_code
 
   # Resolve symlink (workspace may have moved the project)
   REAL_DIR="$(readlink -f "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"
@@ -150,6 +148,7 @@ install_macos() {
   # Dependencies
   info "Installing Node.js dependencies..."
   npm install --production 2>&1 | tail -1
+  sync_sdk_version
   log "Node.js dependencies installed"
 
   if [ -f "mcp/requirements.txt" ]; then
@@ -240,9 +239,7 @@ install_linux() {
   # Global tools
   info "Installing pm2..."
   npm list -g pm2 > /dev/null 2>&1 || npm install -g pm2 2>&1 | tail -1
-  info "Installing claude-code..."
-  npm list -g @anthropic-ai/claude-code > /dev/null 2>&1 || npm install -g @anthropic-ai/claude-code 2>&1 | tail -1
-  log "pm2 and claude-code installed"
+  install_or_upgrade_claude_code
 
   # Resolve symlink
   REAL_DIR="$(readlink -f "$INSTALL_DIR" 2>/dev/null || echo "$INSTALL_DIR")"
@@ -268,6 +265,7 @@ install_linux() {
   # Dependencies
   info "Installing Node.js dependencies..."
   npm install --production 2>&1 | tail -1
+  sync_sdk_version
   log "Node.js dependencies installed"
 
   if [ -f "mcp/requirements.txt" ]; then
@@ -326,6 +324,31 @@ run_as_user() {
   else
     su - "$RUN_USER" -c "$1"
   fi
+}
+
+install_or_upgrade_claude_code() {
+  local CURRENT_CLI=""
+  if command -v claude &>/dev/null; then
+    CURRENT_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
+  fi
+
+  if [ -z "$CURRENT_CLI" ]; then
+    info "Installing Claude Code..."
+    npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -1
+  else
+    info "Found Claude Code $CURRENT_CLI, checking for updates..."
+    npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -1
+  fi
+
+  local NEW_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
+  log "Claude Code $NEW_CLI"
+}
+
+sync_sdk_version() {
+  # After npm install, ensure SDK matches latest CLI
+  info "Syncing claude-agent-sdk to latest..."
+  npm install @anthropic-ai/claude-agent-sdk@latest 2>&1 | tail -1
+  log "SDK synced"
 }
 
 init_workspace() {
