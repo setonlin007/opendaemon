@@ -1630,7 +1630,31 @@ async function buildMCPTools() {
 
 // ── Start ──
 
+async function checkVersionCompat() {
+  try {
+    const cliVersion = execSync("claude --version 2>/dev/null", { encoding: "utf-8" }).trim().split(/\s/)[0];
+    const sdkPkg = JSON.parse(readFileSync(join(__dirname, "node_modules/@anthropic-ai/claude-agent-sdk/package.json"), "utf-8"));
+    const sdkVersion = sdkPkg.version;
+    // Extract patch: CLI 2.1.91 → "91", SDK 0.2.91 → "91"
+    const cliPatch = cliVersion.split(".").pop();
+    const sdkPatch = sdkVersion.split(".").pop();
+    if (cliPatch !== sdkPatch) {
+      console.warn(`[init] ⚠ Version mismatch: Claude Code CLI ${cliVersion}, SDK ${sdkVersion}`);
+      console.log("[init] Auto-upgrading SDK to match CLI...");
+      execSync("npm install @anthropic-ai/claude-agent-sdk@latest", { cwd: __dirname, stdio: "pipe" });
+      const newPkg = JSON.parse(readFileSync(join(__dirname, "node_modules/@anthropic-ai/claude-agent-sdk/package.json"), "utf-8"));
+      console.log(`[init] SDK upgraded: ${sdkVersion} → ${newPkg.version}`);
+    } else {
+      console.log(`[init] Claude Code CLI ${cliVersion}, SDK ${sdkVersion} ✓`);
+    }
+  } catch (err) {
+    console.warn(`[init] version check skipped: ${err.message}`);
+  }
+}
+
 async function startup() {
+  await checkVersionCompat();
+
   try {
     await initMCP();
   } catch (err) {
