@@ -45,6 +45,8 @@ const I18N = {
     // Update lang toggle button label
     const langBtn = document.querySelector('.lang-toggle-label');
     if (langBtn) langBtn.textContent = this._locale === 'zh' ? 'EN' : '中';
+    // Notify listeners (e.g. re-render dynamic panels)
+    if (this._onLocaleChange) this._onLocaleChange();
   },
 };
 

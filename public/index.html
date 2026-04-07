@@ -3567,6 +3567,7 @@ function openAboutPanel() {
 }
 function closeAboutPanel() { $('aboutOverlay').classList.remove('open'); }
 function switchAboutTab(tab, el) {
+  currentAboutTab = tab;
   document.querySelectorAll('.about-nav-item').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
   const body = $('aboutBody');
@@ -5445,6 +5446,13 @@ async function revokeOAuth() {
     checkOAuthStatus();
   } catch {}
 }
+
+// Re-render current about tab on locale change
+let currentAboutTab = 'intro';
+I18N._onLocaleChange = () => {
+  const activeEl = document.querySelector('.about-nav-item.active');
+  if (activeEl && $('aboutBody')) switchAboutTab(currentAboutTab, activeEl);
+};
 
 async function saveEngineForm(isEdit) {
   const type = $('engType')?.value;
