@@ -5279,9 +5279,9 @@ function buildAgenticAuthFields(mode, e = {}) {
     return `
       <div id="oauthStatusArea" style="margin-bottom:12px;padding:12px;border-radius:8px;background:var(--bg-2);border:1px solid var(--border)">
         <div id="oauthStatusMsg" style="font-size:13px;margin-bottom:10px"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="eng-btn-primary" id="oauthLoginBtn" onclick="startOAuthLogin()" style="font-size:12px;padding:5px 14px;border-radius:6px">Login with Claude</button>
-          <button class="eng-btn-secondary" id="oauthRevokeBtn" onclick="revokeOAuth()" style="font-size:12px;padding:5px 14px;border-radius:6px;display:none">Revoke</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
+          <button id="oauthLoginBtn" onclick="startOAuthLogin()" style="font-size:12px;padding:6px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:500;transition:opacity .15s">Login with Claude</button>
+          <button id="oauthRevokeBtn" onclick="revokeOAuth()" style="font-size:12px;padding:6px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-2);cursor:pointer;transition:background .15s;display:none">Revoke</button>
         </div>
         <div id="oauthCodeArea" style="display:none;margin-top:8px">
           <div id="oauthUrlArea" style="margin-bottom:8px">
