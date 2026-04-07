@@ -5285,7 +5285,7 @@ function buildAgenticAuthFields(mode, e = {}) {
           <button class="eng-btn-secondary" id="oauthRevokeBtn" onclick="revokeOAuth()" style="font-size:12px;padding:4px 12px;display:none">Revoke</button>
         </div>
         <div id="oauthCodeArea" style="display:none;margin-top:8px">
-          <div style="font-size:12px;color:var(--text-3);margin-bottom:4px">${i18n.locale === 'zh' ? '在弹出窗口中授权后，粘贴授权码：' : 'After authorizing in the popup, paste the code:'}</div>
+          <div style="font-size:12px;color:var(--text-3);margin-bottom:4px">${I18N.locale === 'zh' ? '在弹出窗口中授权后，粘贴授权码：' : 'After authorizing in the popup, paste the code:'}</div>
           <div style="display:flex;gap:6px">
             <input id="oauthCodeInput" placeholder="Paste authorization code..." style="flex:1;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-1)">
             <button class="eng-btn-primary" onclick="exchangeOAuthCode()" style="font-size:12px;padding:4px 12px">Submit</button>
@@ -5338,22 +5338,22 @@ async function checkOAuthStatus() {
     const data = await res.json();
     if (data.authenticated) {
       const exp = new Date(data.expiresAt);
-      msgEl.innerHTML = `<span style="color:var(--green)">✓ ${i18n.locale === 'zh' ? '已登录' : 'Logged in'}</span> <span style="color:var(--text-3);font-size:11px">(${i18n.locale === 'zh' ? '过期' : 'expires'}: ${exp.toLocaleString()})</span>`;
-      loginBtn.textContent = i18n.locale === 'zh' ? '重新登录' : 'Re-login';
+      msgEl.innerHTML = `<span style="color:var(--green)">✓ ${I18N.locale === 'zh' ? '已登录' : 'Logged in'}</span> <span style="color:var(--text-3);font-size:11px">(${I18N.locale === 'zh' ? '过期' : 'expires'}: ${exp.toLocaleString()})</span>`;
+      loginBtn.textContent = I18N.locale === 'zh' ? '重新登录' : 'Re-login';
       revokeBtn.style.display = '';
     } else if (data.expired && data.hasRefresh) {
-      msgEl.innerHTML = `<span style="color:var(--yellow)">⟳ ${i18n.locale === 'zh' ? 'Token 已过期，可刷新' : 'Token expired, can refresh'}</span>`;
-      loginBtn.textContent = i18n.locale === 'zh' ? '刷新 Token' : 'Refresh Token';
+      msgEl.innerHTML = `<span style="color:var(--yellow)">⟳ ${I18N.locale === 'zh' ? 'Token 已过期，可刷新' : 'Token expired, can refresh'}</span>`;
+      loginBtn.textContent = I18N.locale === 'zh' ? '刷新 Token' : 'Refresh Token';
       loginBtn.onclick = refreshOAuth;
       revokeBtn.style.display = '';
     } else {
-      msgEl.innerHTML = `<span style="color:var(--text-3)">${i18n.locale === 'zh' ? '未登录' : 'Not logged in'}</span>`;
+      msgEl.innerHTML = `<span style="color:var(--text-3)">${I18N.locale === 'zh' ? '未登录' : 'Not logged in'}</span>`;
       loginBtn.textContent = 'Login with Claude';
       loginBtn.onclick = startOAuthLogin;
       revokeBtn.style.display = 'none';
     }
   } catch {
-    msgEl.innerHTML = `<span style="color:var(--text-3)">${i18n.locale === 'zh' ? '无法获取状态' : 'Unable to check status'}</span>`;
+    msgEl.innerHTML = `<span style="color:var(--text-3)">${I18N.locale === 'zh' ? '无法获取状态' : 'Unable to check status'}</span>`;
   }
 }
 
@@ -5397,7 +5397,7 @@ async function exchangeOAuthCode() {
 async function refreshOAuth() {
   const msgEl = $('oauthStatusMsg');
   try {
-    msgEl.innerHTML = `<span style="color:var(--text-3)">⟳ ${i18n.locale === 'zh' ? '刷新中...' : 'Refreshing...'}</span>`;
+    msgEl.innerHTML = `<span style="color:var(--text-3)">⟳ ${I18N.locale === 'zh' ? '刷新中...' : 'Refreshing...'}</span>`;
     const res = await fetch('/api/oauth/refresh', { method: 'POST' });
     const data = await res.json();
     if (data.error) { msgEl.innerHTML = `<span style="color:var(--red)">${esc(data.error)}</span>`; return; }
@@ -5408,7 +5408,7 @@ async function refreshOAuth() {
 }
 
 async function revokeOAuth() {
-  if (!confirm(i18n.locale === 'zh' ? '确认撤销 OAuth 登录？' : 'Revoke OAuth login?')) return;
+  if (!confirm(I18N.locale === 'zh' ? '确认撤销 OAuth 登录？' : 'Revoke OAuth login?')) return;
   try {
     await fetch('/api/oauth/revoke', { method: 'POST' });
     checkOAuthStatus();
