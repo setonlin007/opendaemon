@@ -5280,8 +5280,8 @@ function buildAgenticAuthFields(mode, e = {}) {
       <div id="oauthStatusArea" style="margin-bottom:12px;padding:12px;border-radius:8px;background:var(--bg-2);border:1px solid var(--border)">
         <div id="oauthStatusMsg" style="font-size:13px;margin-bottom:10px"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">
-          <button id="oauthLoginBtn" onclick="startOAuthLogin()" style="font-size:12px;padding:6px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:500;transition:opacity .15s">Login with Claude</button>
-          <button id="oauthRevokeBtn" onclick="revokeOAuth()" style="font-size:12px;padding:6px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-2);cursor:pointer;transition:background .15s;display:none">Revoke</button>
+          <button id="oauthLoginBtn" onclick="startOAuthLogin()" style="font-size:12px;padding:6px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:500;transition:opacity .15s">${I18N.locale === 'zh' ? '登录 Claude' : 'Login with Claude'}</button>
+          <button id="oauthRevokeBtn" onclick="revokeOAuth()" style="font-size:12px;padding:6px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-2);cursor:pointer;transition:background .15s;display:none">${I18N.locale === 'zh' ? '撤销' : 'Revoke'}</button>
         </div>
         <div id="oauthCodeArea" style="display:none;margin-top:8px">
           <div id="oauthUrlArea" style="margin-bottom:8px">
@@ -5293,8 +5293,8 @@ function buildAgenticAuthFields(mode, e = {}) {
           </div>
           <div style="font-size:12px;color:var(--text-3);margin-bottom:4px">${I18N.locale === 'zh' ? '授权后，粘贴授权码：' : 'After authorizing, paste the code:'}</div>
           <div style="display:flex;gap:6px">
-            <input id="oauthCodeInput" placeholder="Paste authorization code..." style="flex:1;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-1)">
-            <button class="eng-btn-primary" onclick="exchangeOAuthCode()" style="font-size:12px;padding:4px 12px">Submit</button>
+            <input id="oauthCodeInput" placeholder="${I18N.locale === 'zh' ? '粘贴授权码...' : 'Paste authorization code...'}" style="flex:1;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg-2);color:var(--text-1)">
+            <button class="eng-btn-primary" onclick="exchangeOAuthCode()" style="font-size:12px;padding:4px 12px">${I18N.locale === 'zh' ? '提交' : 'Submit'}</button>
           </div>
         </div>
       </div>
@@ -5377,7 +5377,7 @@ async function checkOAuthStatus() {
             ${I18N.locale === 'zh' ? '未连接' : 'Not Connected'}
           </span>
         </div>`;
-      loginBtn.textContent = 'Login with Claude';
+      loginBtn.textContent = I18N.locale === 'zh' ? '登录 Claude' : 'Login with Claude';
       loginBtn.onclick = startOAuthLogin;
       revokeBtn.style.display = 'none';
     }
