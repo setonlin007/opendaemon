@@ -327,16 +327,18 @@ run_as_user() {
 }
 
 install_or_upgrade_claude_code() {
-  # Claude Code CLI is optional — OAuth login is handled by OpenDaemon web UI
   if command -v claude &>/dev/null; then
     local CURRENT_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
     info "Found Claude Code CLI $CURRENT_CLI, upgrading..."
-    npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -1
-    local NEW_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
+  else
+    info "Installing Claude Code CLI..."
+  fi
+  npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -1
+  local NEW_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
+  if [ -n "$NEW_CLI" ]; then
     log "Claude Code CLI $NEW_CLI"
   else
-    info "Claude Code CLI not installed — skipping (login via web UI)"
-    log "Claude Code CLI: not required"
+    warn "Claude Code CLI installation failed"
   fi
 }
 
