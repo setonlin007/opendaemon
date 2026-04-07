@@ -5277,12 +5277,11 @@ function buildAgenticAuthFields(mode, e = {}) {
 
   if (mode === 'oauth') {
     return `
-      <div id="oauthStatusArea" style="margin-bottom:10px">
-        <div style="font-size:12px;color:var(--text-3);margin-bottom:8px">${t('usingOauth')}</div>
-        <div id="oauthStatusMsg" style="font-size:12px;margin-bottom:8px"></div>
+      <div id="oauthStatusArea" style="margin-bottom:12px;padding:12px;border-radius:8px;background:var(--bg-2);border:1px solid var(--border)">
+        <div id="oauthStatusMsg" style="font-size:13px;margin-bottom:10px"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="eng-btn-primary" id="oauthLoginBtn" onclick="startOAuthLogin()" style="font-size:12px;padding:4px 12px">Login with Claude</button>
-          <button class="eng-btn-secondary" id="oauthRevokeBtn" onclick="revokeOAuth()" style="font-size:12px;padding:4px 12px;display:none">Revoke</button>
+          <button class="eng-btn-primary" id="oauthLoginBtn" onclick="startOAuthLogin()" style="font-size:12px;padding:5px 14px;border-radius:6px">Login with Claude</button>
+          <button class="eng-btn-secondary" id="oauthRevokeBtn" onclick="revokeOAuth()" style="font-size:12px;padding:5px 14px;border-radius:6px;display:none">Revoke</button>
         </div>
         <div id="oauthCodeArea" style="display:none;margin-top:8px">
           <div id="oauthUrlArea" style="margin-bottom:8px">
@@ -5344,17 +5343,40 @@ async function checkOAuthStatus() {
     const res = await fetch('/api/oauth/status');
     const data = await res.json();
     if (data.authenticated) {
-      const exp = new Date(data.expiresAt);
-      msgEl.innerHTML = `<span style="color:var(--green)">✓ ${I18N.locale === 'zh' ? '已登录' : 'Logged in'}</span> <span style="color:var(--text-3);font-size:11px">(${I18N.locale === 'zh' ? '过期' : 'expires'}: ${exp.toLocaleString()})</span>`;
-      loginBtn.textContent = I18N.locale === 'zh' ? '重新登录' : 'Re-login';
+      const remaining = Math.max(0, data.expiresAt - Date.now());
+      const hours = Math.floor(remaining / 3600000);
+      const mins = Math.floor((remaining % 3600000) / 60000);
+      const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+      const zh = I18N.locale === 'zh';
+      msgEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:rgba(52,211,153,0.15);color:#34d399;font-size:12px;font-weight:500">
+            <span style="width:6px;height:6px;border-radius:50%;background:#34d399;display:inline-block"></span>
+            ${zh ? '已连接' : 'Connected'}
+          </span>
+          <span style="color:var(--text-3);font-size:11px">${zh ? '自动续期' : 'auto-renewing'} · ${timeStr} ${zh ? '后刷新' : 'until refresh'}</span>
+        </div>`;
+      loginBtn.textContent = zh ? '切换账号' : 'Switch Account';
       revokeBtn.style.display = '';
     } else if (data.expired && data.hasRefresh) {
-      msgEl.innerHTML = `<span style="color:var(--yellow)">⟳ ${I18N.locale === 'zh' ? 'Token 已过期，可刷新' : 'Token expired, can refresh'}</span>`;
+      msgEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:rgba(251,191,36,0.15);color:#fbbf24;font-size:12px;font-weight:500">
+            <span style="width:6px;height:6px;border-radius:50%;background:#fbbf24;display:inline-block"></span>
+            ${I18N.locale === 'zh' ? 'Token 已过期' : 'Token Expired'}
+          </span>
+        </div>`;
       loginBtn.textContent = I18N.locale === 'zh' ? '刷新 Token' : 'Refresh Token';
       loginBtn.onclick = refreshOAuth;
       revokeBtn.style.display = '';
     } else {
-      msgEl.innerHTML = `<span style="color:var(--text-3)">${I18N.locale === 'zh' ? '未登录' : 'Not logged in'}</span>`;
+      msgEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:rgba(156,163,175,0.15);color:var(--text-3);font-size:12px;font-weight:500">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--text-3);display:inline-block"></span>
+            ${I18N.locale === 'zh' ? '未连接' : 'Not Connected'}
+          </span>
+        </div>`;
       loginBtn.textContent = 'Login with Claude';
       loginBtn.onclick = startOAuthLogin;
       revokeBtn.style.display = 'none';
