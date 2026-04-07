@@ -5013,7 +5013,7 @@ function closeEnginesPanel() {
 }
 
 async function renderEnginesList() {
-  const body = $('engBody');
+  const body = $('engBodyInline') || $('engBody');
   try {
     const data = await api('GET', '/api/engines');
     const engineList = data.engines || [];
@@ -5096,7 +5096,7 @@ async function editEngine(id) {
 }
 
 function showEngineForm(existing) {
-  const body = $('engBody');
+  const body = $('engBodyInline') || $('engBody');
   const isEdit = !!existing;
   const type = existing?.type || '';
   const category = existing?.category || '';
