@@ -158,6 +158,16 @@ input:focus, select:focus { border-color: #e94560; }
         <div class="desc">Claude + API engine</div>
       </div>
     </div>
+    <div class="claude-oauth" id="claudeOauth" style="display:none;margin-top:16px;">
+      <div id="oauthStatusArea"></div>
+      <button class="btn btn-primary" id="oauthLoginBtn" onclick="startOAuth()" style="width:100%;margin-top:8px;">Login with Claude Account</button>
+      <div id="oauthCodeArea" style="display:none;margin-top:12px;">
+        <label>Paste the authorization code from the browser:</label>
+        <input type="text" id="oauthCode" placeholder="Paste authorization code here...">
+        <button class="btn btn-primary" onclick="exchangeOAuth()" style="width:100%;margin-top:8px;">Verify</button>
+      </div>
+      <div id="oauthSuccess" style="display:none;margin-top:12px;color:#4ade80;font-size:13px;">Logged in successfully!</div>
+    </div>
     <div class="api-fields" id="apiFields">
       <label>Engine Name</label>
       <input type="text" id="engineLabel" placeholder="e.g. Kimi K2, Gemini, GPT-4o">
@@ -234,6 +244,79 @@ function selectEngine(type) {
   else if (type === 'openai') document.getElementById('cardOpenAI').classList.add('selected');
   else document.getElementById('cardBoth').classList.add('selected');
   document.getElementById('apiFields').className = (type === 'openai' || type === 'both') ? 'api-fields show' : 'api-fields';
+  // Show OAuth login for Claude engine
+  const oauthDiv = document.getElementById('claudeOauth');
+  if (type === 'claude-sdk' || type === 'both') {
+    oauthDiv.style.display = 'block';
+    checkOAuthStatus();
+  } else {
+    oauthDiv.style.display = 'none';
+  }
+}
+
+let oauthState = null;
+
+async function checkOAuthStatus() {
+  try {
+    const res = await fetch('/api/oauth/status');
+    const data = await res.json();
+    const area = document.getElementById('oauthStatusArea');
+    const btn = document.getElementById('oauthLoginBtn');
+    const success = document.getElementById('oauthSuccess');
+    if (data.authenticated) {
+      area.innerHTML = '<div style="color:#4ade80;font-size:13px;">Claude account connected</div>';
+      btn.style.display = 'none';
+      success.style.display = 'block';
+    } else if (data.hasRefresh) {
+      area.innerHTML = '<div style="color:#facc15;font-size:13px;">Token expired, refreshing...</div>';
+      fetch('/api/oauth/refresh', { method: 'POST' }).then(() => checkOAuthStatus());
+    } else {
+      area.innerHTML = '<div style="color:#888;font-size:13px;">Login to use Claude with your account (Pro/Max plan)</div>';
+      btn.style.display = 'block';
+      success.style.display = 'none';
+    }
+  } catch {}
+}
+
+async function startOAuth() {
+  const btn = document.getElementById('oauthLoginBtn');
+  btn.disabled = true;
+  btn.textContent = 'Opening browser...';
+  try {
+    const res = await fetch('/api/oauth/start', { method: 'POST' });
+    const data = await res.json();
+    oauthState = data.state;
+    window.open(data.authUrl, '_blank');
+    document.getElementById('oauthCodeArea').style.display = 'block';
+    btn.textContent = 'Waiting for authorization...';
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'Login with Claude Account';
+    alert('Failed: ' + err.message);
+  }
+}
+
+async function exchangeOAuth() {
+  const code = document.getElementById('oauthCode').value.trim();
+  if (!code) return;
+  try {
+    const res = await fetch('/api/oauth/exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, state: oauthState }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('oauthCodeArea').style.display = 'none';
+      document.getElementById('oauthLoginBtn').style.display = 'none';
+      document.getElementById('oauthSuccess').style.display = 'block';
+      document.getElementById('oauthStatusArea').innerHTML = '<div style="color:#4ade80;font-size:13px;">Claude account connected</div>';
+    } else {
+      alert(data.error || 'Exchange failed');
+    }
+  } catch (err) {
+    alert('Failed: ' + err.message);
+  }
 }
 
 function selectTunnel(yes) {

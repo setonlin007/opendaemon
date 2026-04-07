@@ -327,21 +327,17 @@ run_as_user() {
 }
 
 install_or_upgrade_claude_code() {
-  local CURRENT_CLI=""
+  # Claude Code CLI is optional — OAuth login is handled by OpenDaemon web UI
   if command -v claude &>/dev/null; then
-    CURRENT_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
-  fi
-
-  if [ -z "$CURRENT_CLI" ]; then
-    info "Installing Claude Code..."
+    local CURRENT_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
+    info "Found Claude Code CLI $CURRENT_CLI, upgrading..."
     npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -1
+    local NEW_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
+    log "Claude Code CLI $NEW_CLI"
   else
-    info "Found Claude Code $CURRENT_CLI, checking for updates..."
-    npm install -g @anthropic-ai/claude-code@latest 2>&1 | tail -1
+    info "Claude Code CLI not installed — skipping (login via web UI)"
+    log "Claude Code CLI: not required"
   fi
-
-  local NEW_CLI=$(claude --version 2>/dev/null | head -1 | awk '{print $1}')
-  log "Claude Code $NEW_CLI"
 }
 
 sync_sdk_version() {
@@ -449,10 +445,10 @@ show_done() {
   echo -e "  ${CYAN}Config:${NC}    ${INSTALL_DIR}/config.json"
   echo ""
   echo -e "  ${YELLOW}Next steps:${NC}"
-  echo -e "    1. Run ${BOLD}claude login${NC} if you haven't already"
-  echo -e "    2. Open ${BOLD}http://${IP}:${PORT}${NC} — setup wizard will guide you"
+  echo -e "    1. Open ${BOLD}http://${IP}:${PORT}${NC} — setup wizard will guide you"
+  echo -e "       (includes Claude account login, no extra tools needed)"
   if [ "$PLATFORM" != "macos" ]; then
-    echo -e "    3. Open firewall port ${PORT} if needed"
+    echo -e "    2. Open firewall port ${PORT} if needed"
   fi
   echo ""
 }

@@ -217,8 +217,8 @@ const server = http.createServer(async (req, res) => {
 
   // ── Setup mode: redirect to wizard if not configured ──
   if (needsSetup()) {
-    if (path === "/setup.html" || path === "/api/setup") {
-      // Allow setup page and API through
+    if (path === "/setup.html" || path === "/api/setup" || path.startsWith("/api/oauth/")) {
+      // Allow setup page, setup API, and OAuth routes through
     } else if (path.startsWith("/api/")) {
       json(res, { error: "not configured", setup: true }, 503);
       return;
@@ -383,6 +383,67 @@ const server = http.createServer(async (req, res) => {
       _versionCache = { latest: null, checkedAt: 0 };
     } catch (err) {
       json(res, { ok: false, error: err.message }, 500);
+    }
+    return;
+  }
+
+  // ── OAuth routes (Claude AI login) ──
+
+  if (method === "GET" && path === "/api/oauth/status") {
+    try {
+      const { getOAuthStatus } = await import("./lib/oauth.mjs");
+      json(res, getOAuthStatus());
+    } catch (err) {
+      json(res, { authenticated: false, error: err.message });
+    }
+    return;
+  }
+
+  if (method === "POST" && path === "/api/oauth/start") {
+    try {
+      const { generateAuthUrl } = await import("./lib/oauth.mjs");
+      json(res, generateAuthUrl());
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path === "/api/oauth/exchange") {
+    try {
+      const body = await readBody(req);
+      if (!body?.code || !body?.state) {
+        json(res, { error: "code and state are required" }, 400);
+        return;
+      }
+      const { exchangeCode, startTokenRefreshTimer } = await import("./lib/oauth.mjs");
+      const result = await exchangeCode(body.code, body.state);
+      startTokenRefreshTimer();
+      json(res, { ok: true, ...result });
+    } catch (err) {
+      json(res, { error: err.message }, 400);
+    }
+    return;
+  }
+
+  if (method === "POST" && path === "/api/oauth/refresh") {
+    try {
+      const { refreshToken } = await import("./lib/oauth.mjs");
+      const result = await refreshToken();
+      json(res, { ok: true, ...result });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path === "/api/oauth/revoke") {
+    try {
+      const { revokeTokens } = await import("./lib/oauth.mjs");
+      revokeTokens();
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
     }
     return;
   }
@@ -1654,6 +1715,24 @@ async function checkVersionCompat() {
 
 async function startup() {
   await checkVersionCompat();
+
+  // OAuth token check & refresh timer
+  try {
+    const { getOAuthStatus, ensureValidToken, startTokenRefreshTimer } = await import("./lib/oauth.mjs");
+    const status = getOAuthStatus();
+    if (status.authenticated) {
+      startTokenRefreshTimer();
+      console.log("[init] OAuth tokens valid, refresh timer started");
+    } else if (status.hasRefresh) {
+      await ensureValidToken();
+      startTokenRefreshTimer();
+      console.log("[init] OAuth tokens refreshed, timer started");
+    } else {
+      console.log("[init] No OAuth tokens — login via web UI or claude login");
+    }
+  } catch (err) {
+    console.log("[init] OAuth check skipped:", err.message);
+  }
 
   try {
     await initMCP();
