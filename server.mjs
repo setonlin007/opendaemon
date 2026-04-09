@@ -3,7 +3,7 @@ import http from "http";
 import https from "https";
 import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
-import { dirname, join, basename } from "path";
+import { dirname, join, basename, resolve } from "path";
 import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, writeFileSync } from "fs";
 import { execSync, exec } from "child_process";
 import { homedir } from "os";
