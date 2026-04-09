@@ -64,8 +64,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .ws-dialog .ws-dialog-btns button { padding: 7px 16px; border-radius: 8px; font-size: 12px; cursor: pointer; border: none; }
 .ws-dialog .ws-dialog-btns .ws-btn-cancel { background: var(--hover); color: var(--text-2); }
 .ws-dialog .ws-dialog-btns .ws-btn-ok { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; font-weight: 600; }
-.ws-path-suggestions { display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 10; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+.ws-path-wrapper { position: relative; }
+.ws-path-input-row { display: flex; gap: 6px; align-items: center; }
+.ws-path-input-row input { flex: 1; }
+.ws-path-home-btn { padding: 7px 10px; background: var(--hover); border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); font-size: 12px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all .15s; }
+.ws-path-home-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
+.ws-path-breadcrumb { display: flex; align-items: center; gap: 2px; margin-top: 6px; flex-wrap: wrap; min-height: 22px; }
+.ws-path-breadcrumb .ws-bc-seg { font-size: 11px; color: var(--accent); cursor: pointer; padding: 1px 4px; border-radius: 4px; }
+.ws-path-breadcrumb .ws-bc-seg:hover { background: var(--hover); }
+.ws-path-breadcrumb .ws-bc-sep { font-size: 10px; color: var(--text-3); }
+.ws-path-breadcrumb .ws-bc-status { margin-left: auto; font-size: 11px; padding: 1px 6px; border-radius: 4px; }
+.ws-path-breadcrumb .ws-bc-status.valid { color: #4ade80; }
+.ws-path-breadcrumb .ws-bc-status.invalid { color: #f87171; }
+.ws-path-suggestions { display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 10; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
 .ws-path-suggestions.open { display: block; }
+.ws-path-suggestions .ws-path-section { padding: 4px 10px 2px; font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; }
 .ws-path-item { padding: 6px 10px; font-size: 12px; color: var(--text-2); cursor: pointer; display: flex; align-items: center; gap: 6px; }
 .ws-path-item:hover { background: var(--hover); color: var(--text); }
 .ws-path-item .ws-path-icon { font-size: 11px; opacity: 0.6; }
@@ -5790,6 +5803,7 @@ async function switchWorkspace(id) {
 
 let wsDialogMode = 'create';
 let wsDialogEditId = null;
+let _wsHomePath = ''; // cached server home directory
 
 function openWsDialog(editId) {
   $('wsPopover').classList.remove('open');
@@ -5797,16 +5811,22 @@ function openWsDialog(editId) {
   wsDialogEditId = editId || null;
   $('wsDialogTitle').textContent = editId ? 'Edit Workspace' : 'New Workspace';
   $('wsDialogOk').textContent = editId ? 'Save' : 'Create';
+  $('wsPathBreadcrumb').innerHTML = '';
   if (editId) {
     const ws = workspaces.find(w => w.id === editId);
     $('wsDialogName').value = ws?.name || '';
     $('wsDialogPath').value = ws?.path || '';
+    if (ws?.path) updateWsBreadcrumb(ws.path, true);
   } else {
     $('wsDialogName').value = '';
     $('wsDialogPath').value = '';
   }
   $('wsDialogOverlay').classList.add('open');
   $('wsDialogName').focus();
+  // Pre-fetch home directory
+  if (!_wsHomePath) {
+    api('GET', '/api/browse-dirs').then(d => { _wsHomePath = d.home || ''; }).catch(() => {});
+  }
 }
 
 function closeWsDialog() {
@@ -5814,36 +5834,108 @@ function closeWsDialog() {
   $('wsPathSuggestions').classList.remove('open');
 }
 
+// Breadcrumb: render clickable path segments + validity status
+function updateWsBreadcrumb(fullPath, valid) {
+  const bc = $('wsPathBreadcrumb');
+  if (!fullPath) { bc.innerHTML = ''; return; }
+  const clean = fullPath.replace(/\/+$/, '');
+  const parts = clean.split('/').filter(Boolean);
+  let html = '';
+  let cumulative = '';
+  for (let i = 0; i < parts.length; i++) {
+    cumulative += '/' + parts[i];
+    const p = cumulative;
+    if (i > 0) html += '<span class="ws-bc-sep">/</span>';
+    html += `<span class="ws-bc-seg" onmousedown="navigateWsPath('${p.replace(/'/g, "\\'")}')">${esc(parts[i])}</span>`;
+  }
+  if (typeof valid === 'boolean') {
+    html += `<span class="ws-bc-status ${valid ? 'valid' : 'invalid'}">${valid ? '✓ valid' : '✗ not found'}</span>`;
+  }
+  bc.innerHTML = html;
+}
+
+// Click breadcrumb segment → navigate to that path
+function navigateWsPath(p) {
+  $('wsDialogPath').value = p + '/';
+  $('wsDialogPath').focus();
+  onWsPathInput(p + '/');
+}
+
+// Home button → fill home path and browse
+async function onWsPathHomeClick() {
+  try {
+    const data = await api('GET', '/api/browse-dirs');
+    _wsHomePath = data.home || data.path || '';
+    if (_wsHomePath) {
+      $('wsDialogPath').value = _wsHomePath + '/';
+      $('wsDialogPath').focus();
+      _browseDirAndShow(_wsHomePath, '');
+      updateWsBreadcrumb(_wsHomePath, true);
+    }
+  } catch {}
+}
+
+// Focus on empty input → auto-browse home dir
+function onWsPathFocus() {
+  const val = $('wsDialogPath').value.trim();
+  if (!val) {
+    onWsPathHomeClick();
+  }
+}
+
 let _wsPathTimer = null;
 async function onWsPathInput(val) {
   clearTimeout(_wsPathTimer);
   const sg = $('wsPathSuggestions');
-  if (!val || val.length < 1) { sg.classList.remove('open'); return; }
+  if (!val || val.length < 1) {
+    sg.classList.remove('open');
+    $('wsPathBreadcrumb').innerHTML = '';
+    return;
+  }
   _wsPathTimer = setTimeout(async () => {
     try {
       // If path ends with '/', browse that dir; otherwise browse parent dir
       const browsePath = val.endsWith('/') ? val : val.substring(0, val.lastIndexOf('/') + 1);
       if (!browsePath) { sg.classList.remove('open'); return; }
       const data = await api('GET', `/api/browse-dirs?path=${encodeURIComponent(browsePath)}`);
-      if (!data.dirs || data.dirs.length === 0) { sg.classList.remove('open'); return; }
+      // Update breadcrumb with resolved path and validity
+      const displayPath = val.endsWith('/') ? data.path : data.path.replace(/\/$/, '') + '/' + val.substring(val.lastIndexOf('/') + 1);
+      updateWsBreadcrumb(val.endsWith('/') ? data.path : val, data.valid);
       // Filter by typed partial name after last /
       const partial = val.endsWith('/') ? '' : val.substring(val.lastIndexOf('/') + 1).toLowerCase();
-      const filtered = partial ? data.dirs.filter(d => d.toLowerCase().startsWith(partial)) : data.dirs;
-      if (filtered.length === 0) { sg.classList.remove('open'); return; }
-      sg.innerHTML = filtered.map(d => {
-        const full = data.path.replace(/\/$/, '') + '/' + d;
-        return `<div class="ws-path-item" onmousedown="selectWsPath('${full.replace(/'/g, "\\'")}')"><span class="ws-path-icon">📁</span>${d}/</div>`;
-      }).join('');
-      sg.classList.add('open');
+      const filtered = partial ? (data.dirs || []).filter(d => d.toLowerCase().startsWith(partial)) : (data.dirs || []);
+      _renderWsSuggestions(data, filtered);
     } catch { sg.classList.remove('open'); }
   }, 200);
+}
+
+// Shared render for directory suggestions
+function _renderWsSuggestions(data, filtered) {
+  const sg = $('wsPathSuggestions');
+  if (!filtered || filtered.length === 0) { sg.classList.remove('open'); return; }
+  let html = `<div class="ws-path-section">${esc(data.path)}</div>`;
+  html += filtered.map(d => {
+    const full = data.path.replace(/\/$/, '') + '/' + d;
+    return `<div class="ws-path-item" onmousedown="selectWsPath('${full.replace(/'/g, "\\'")}')"><span class="ws-path-icon">📁</span>${esc(d)}/</div>`;
+  }).join('');
+  sg.innerHTML = html;
+  sg.classList.add('open');
+}
+
+// Browse a specific dir and show results (no filtering)
+async function _browseDirAndShow(dirPath, partial) {
+  try {
+    const data = await api('GET', `/api/browse-dirs?path=${encodeURIComponent(dirPath)}`);
+    _renderWsSuggestions(data, data.dirs || []);
+  } catch {}
 }
 
 function selectWsPath(p) {
   $('wsDialogPath').value = p + '/';
   $('wsPathSuggestions').classList.remove('open');
+  updateWsBreadcrumb(p, true);
   // Trigger another browse of the selected dir
-  onWsPathInput(p + '/');
+  _browseDirAndShow(p + '/', '');
   $('wsDialogPath').focus();
 }
 
@@ -5917,8 +6009,12 @@ init();
     <label>Name</label>
     <input id="wsDialogName" placeholder="e.g. My Project">
     <label>Path</label>
-    <div style="position:relative;">
-      <input id="wsDialogPath" placeholder="e.g. /home/user/projects/myapp" autocomplete="off" oninput="onWsPathInput(this.value)">
+    <div class="ws-path-wrapper">
+      <div class="ws-path-input-row">
+        <input id="wsDialogPath" placeholder="Click ~ to start browsing..." autocomplete="off" oninput="onWsPathInput(this.value)" onfocus="onWsPathFocus()">
+        <button class="ws-path-home-btn" onclick="onWsPathHomeClick()" title="Home directory">~</button>
+      </div>
+      <div class="ws-path-breadcrumb" id="wsPathBreadcrumb"></div>
       <div class="ws-path-suggestions" id="wsPathSuggestions"></div>
     </div>
     <div class="ws-dialog-btns">

@@ -937,9 +937,11 @@ const server = http.createServer(async (req, res) => {
       const qIdx = req.url.indexOf("?");
       const params = qIdx >= 0 ? new URLSearchParams(req.url.substring(qIdx)) : new URLSearchParams();
       const dirPath = params.get("path") || homedir();
-      const resolved = resolve(dirPath);
-      if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
-        json(res, { path: resolved, dirs: [] });
+      const resolved = resolve(dirPath.replace(/^~/, homedir()));
+      const home = homedir();
+      const valid = existsSync(resolved) && statSync(resolved).isDirectory();
+      if (!valid) {
+        json(res, { path: resolved, home, dirs: [], valid: false });
         return;
       }
       const entries = readdirSync(resolved, { withFileTypes: true });
@@ -948,9 +950,9 @@ const server = http.createServer(async (req, res) => {
         .map(e => e.name)
         .sort((a, b) => a.localeCompare(b))
         .slice(0, 50);
-      json(res, { path: resolved, dirs });
+      json(res, { path: resolved, home, dirs, valid: true });
     } catch (err) {
-      json(res, { path: "", dirs: [], error: err.message });
+      json(res, { path: "", home: homedir(), dirs: [], valid: false, error: err.message });
     }
     return;
   }
