@@ -5466,7 +5466,9 @@ async function checkOAuthStatus() {
   if (!msgEl) return;
   try {
     const res = await fetch('/api/oauth/status');
+    if (!res.ok) { msgEl.innerHTML = `<span style="color:var(--text-3)">${I18N.locale === 'zh' ? '无法获取状态' : 'Unable to check status'}</span>`; return; }
     const data = await res.json();
+    if (data.error) { msgEl.innerHTML = `<span style="color:var(--text-3)">${esc(String(data.error))}</span>`; return; }
     if (data.authenticated) {
       const remaining = Math.max(0, data.expiresAt - Date.now());
       const hours = Math.floor(remaining / 3600000);
@@ -5556,10 +5558,10 @@ async function refreshOAuth() {
     msgEl.innerHTML = `<span style="color:var(--text-3)">⟳ ${I18N.locale === 'zh' ? '刷新中...' : 'Refreshing...'}</span>`;
     const res = await fetch('/api/oauth/refresh', { method: 'POST' });
     const data = await res.json();
-    if (data.error) { msgEl.innerHTML = `<span style="color:var(--red)">${esc(data.error)}</span>`; return; }
+    if (data.error) { msgEl.innerHTML = `<span style="color:var(--red)">${esc(String(data.error))}</span>`; return; }
     checkOAuthStatus();
   } catch (err) {
-    msgEl.innerHTML = `<span style="color:var(--red)">${esc(err.message)}</span>`;
+    msgEl.innerHTML = `<span style="color:var(--red)">${esc(err?.message || String(err))}</span>`;
   }
 }
 

@@ -1769,7 +1769,7 @@ async function startup() {
       console.log("[init] No OAuth tokens — login via web UI or claude login");
     }
   } catch (err) {
-    console.log("[init] OAuth check skipped:", err.message);
+    console.log("[init] OAuth check skipped:", err?.message || String(err));
   }
 
   try {
