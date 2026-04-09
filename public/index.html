@@ -5804,7 +5804,7 @@ let wsDialogMode = 'create';
 let wsDialogEditId = null;
 let _wsHomePath = ''; // cached server home directory
 
-function openWsDialog(editId) {
+async function openWsDialog(editId) {
   $('wsPopover').classList.remove('open');
   wsDialogMode = editId ? 'edit' : 'create';
   wsDialogEditId = editId || null;
@@ -5823,9 +5823,25 @@ function openWsDialog(editId) {
   }
   $('wsDialogOverlay').classList.add('open');
   $('wsDialogName').focus();
-  // Pre-fetch home directory
-  if (!_wsHomePath) {
-    api('GET', '/api/browse-dirs').then(d => { _wsHomePath = d.home || d.path || ''; }).catch(() => {});
+  // For new workspace: pre-load home directory listing
+  if (!editId) {
+    try {
+      const data = await api('GET', '/api/browse-dirs');
+      _wsHomePath = data.home || data.path || '';
+      if (data.dirs && data.dirs.length > 0) {
+        updateWsBreadcrumb(data.path, true);
+        _renderWsSuggestions(data, data.dirs);
+      }
+    } catch (e) { console.error('browse-dirs failed:', e); }
+  } else if ($('wsDialogPath').value) {
+    // Edit mode: load current path's directory listing
+    try {
+      const p = $('wsDialogPath').value.trim().replace(/\/$/, '') + '/';
+      const data = await api('GET', `/api/browse-dirs?path=${encodeURIComponent(p)}`);
+      if (data.dirs && data.dirs.length > 0) {
+        _renderWsSuggestions(data, data.dirs);
+      }
+    } catch {}
   }
 }
 
@@ -6005,7 +6021,7 @@ init();
     <label>Path</label>
     <div class="ws-path-wrapper">
       <div class="ws-path-input-anchor">
-        <input id="wsDialogPath" placeholder="Click to browse server directories..." autocomplete="off" oninput="onWsPathInput(this.value)" onfocus="onWsPathFocus()" onblur="setTimeout(()=>$('wsPathSuggestions').classList.remove('open'),150)">
+        <input id="wsDialogPath" placeholder="Click to browse server directories..." autocomplete="off" oninput="onWsPathInput(this.value)" onfocus="onWsPathFocus()">
         <div class="ws-path-suggestions" id="wsPathSuggestions"></div>
       </div>
       <div class="ws-path-breadcrumb" id="wsPathBreadcrumb"></div>
