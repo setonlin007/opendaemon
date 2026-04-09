@@ -514,6 +514,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .eng-form-actions button { padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: 1px solid var(--border); transition: all 0.15s; flex-shrink: 0; }
 .eng-form-actions .eng-btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .eng-form-actions .eng-btn-primary:hover { opacity: 0.9; }
+.perm-preset { font-size:11px;padding:3px 10px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text-2);cursor:pointer;transition:all .15s; }
+.perm-preset.active { background:var(--accent);color:#fff;border-color:var(--accent); }
+.perm-preset:hover:not(.active) { border-color:var(--accent);color:var(--accent); }
 .eng-form-actions .eng-btn-secondary { background: none; color: var(--text-2); }
 .eng-form-actions .eng-btn-secondary:hover { background: var(--hover); }
 .eng-form-actions .eng-btn-test { background: none; color: var(--text-2); }
@@ -5132,6 +5135,8 @@ function showEngineForm(existing) {
   `;
   // Auto-check OAuth status when editing an OAuth engine
   if (isEdit && $('oauthStatusArea')) checkOAuthStatus();
+  // Load permissions for Claude SDK engines
+  if (isEdit && $('permissionsSection')) loadPermissions();
 }
 
 let engFormType = '';
@@ -5187,6 +5192,7 @@ function selectAgenticSDK(sdkType) {
   const sdkFields = $('engSdkFields');
   sdkFields.innerHTML = buildEngineFields({ type: sdkType, category: 'agentic' });
   if ($('oauthStatusArea')) checkOAuthStatus();
+  if ($('permissionsSection')) loadPermissions();
 }
 
 function applyPreset(category, idx) {
@@ -5247,6 +5253,7 @@ function buildEngineFields(e) {
         </select>
       </div>
       <div id="engAuthFields">${buildAgenticAuthFields(authMode, e)}</div>
+      <div id="permissionsSection"></div>
       <input type="hidden" id="engType" value="${esc(e.type || 'claude-sdk')}">
     `;
   }
@@ -5329,6 +5336,110 @@ function onAuthModeChange() {
   const mode = $('engAuthMode')?.value || 'oauth';
   $('engAuthFields').innerHTML = buildAgenticAuthFields(mode);
   if (mode === 'oauth') checkOAuthStatus();
+}
+
+// ── Tool Permissions ──
+
+const PERM_PRESETS = {
+  all: ['Bash','Edit','Write','Read','Glob','Grep','WebFetch','WebSearch','NotebookEdit'],
+  readonly: ['Read','Glob','Grep','WebSearch'],
+};
+
+async function loadPermissions() {
+  const section = $('permissionsSection');
+  if (!section) return;
+  try {
+    const data = await api('GET', '/api/claude/permissions');
+    renderPermissionsUI(data);
+  } catch {
+    section.innerHTML = '';
+  }
+}
+
+function renderPermissionsUI(data) {
+  const section = $('permissionsSection');
+  if (!section) return;
+  const tools = data.tools || [];
+  const allowedNames = tools.filter(t => t.allowed).map(t => t.name);
+
+  // Detect current preset
+  let preset = 'custom';
+  if (arrEq(allowedNames.sort(), [...PERM_PRESETS.all].sort())) preset = 'all';
+  else if (arrEq(allowedNames.sort(), [...PERM_PRESETS.readonly].sort())) preset = 'readonly';
+
+  const isZh = I18N.locale === 'zh';
+  section.innerHTML = `
+    <div style="margin-top:16px;padding:12px;border-radius:8px;background:var(--bg-2);border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-weight:600;font-size:13px">${t('toolPermissions')}</div>
+        <div style="display:flex;gap:4px" id="permPresets">
+          <button class="perm-preset${preset === 'all' ? ' active' : ''}" onclick="applyPermPreset('all')">${t('presetAll')}</button>
+          <button class="perm-preset${preset === 'readonly' ? ' active' : ''}" onclick="applyPermPreset('readonly')">${t('presetReadonly')}</button>
+          <button class="perm-preset${preset === 'custom' ? ' active' : ''}" onclick="applyPermPreset('custom')">${t('presetCustom')}</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-bottom:10px">${t('permissionsGlobalNote')}</div>
+      <div id="permToolGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px">
+        ${tools.map(tool => `
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">
+            <input type="checkbox" class="perm-cb" data-tool="${tool.name}" ${tool.allowed ? 'checked' : ''} onchange="onPermCheckChange()">
+            <span style="font-weight:500">${tool.name}</span>
+            <span style="color:var(--text-3)">${isZh ? tool.descZh : tool.description}</span>
+          </label>
+        `).join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+        <button class="eng-btn-primary" onclick="savePermissions()" style="font-size:12px;padding:5px 16px">${t('savePerm')}</button>
+        <span id="permStatus" style="font-size:12px;color:var(--text-3)"></span>
+      </div>
+    </div>
+  `;
+}
+
+function arrEq(a, b) {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+function applyPermPreset(preset) {
+  // Update preset button active state
+  document.querySelectorAll('.perm-preset').forEach(btn => btn.classList.remove('active'));
+  const btns = document.querySelectorAll('.perm-preset');
+  if (preset === 'all') btns[0]?.classList.add('active');
+  else if (preset === 'readonly') btns[1]?.classList.add('active');
+  else btns[2]?.classList.add('active');
+
+  if (preset === 'custom') return; // just highlight, don't change checkboxes
+
+  const allowed = PERM_PRESETS[preset] || [];
+  document.querySelectorAll('.perm-cb').forEach(cb => {
+    cb.checked = allowed.includes(cb.dataset.tool);
+  });
+}
+
+function onPermCheckChange() {
+  // When user manually toggles, switch to "custom" preset
+  const checked = [...document.querySelectorAll('.perm-cb:checked')].map(cb => cb.dataset.tool).sort();
+  let preset = 'custom';
+  if (arrEq(checked, [...PERM_PRESETS.all].sort())) preset = 'all';
+  else if (arrEq(checked, [...PERM_PRESETS.readonly].sort())) preset = 'readonly';
+
+  document.querySelectorAll('.perm-preset').forEach(btn => btn.classList.remove('active'));
+  const btns = document.querySelectorAll('.perm-preset');
+  if (preset === 'all') btns[0]?.classList.add('active');
+  else if (preset === 'readonly') btns[1]?.classList.add('active');
+  else btns[2]?.classList.add('active');
+}
+
+async function savePermissions() {
+  const tools = [...document.querySelectorAll('.perm-cb:checked')].map(cb => cb.dataset.tool);
+  const status = $('permStatus');
+  try {
+    await api('PUT', '/api/claude/permissions', { tools });
+    if (status) { status.style.color = 'var(--accent)'; status.textContent = t('permSaved'); }
+    setTimeout(() => { if (status) status.textContent = ''; }, 2000);
+  } catch (err) {
+    if (status) { status.style.color = '#e55'; status.textContent = t('permSaveFailed'); }
+  }
 }
 
 // ── OAuth Login Flow ──

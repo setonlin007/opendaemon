@@ -448,6 +448,34 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Claude permissions routes ──
+
+  if (method === "GET" && path === "/api/claude/permissions") {
+    try {
+      const { getPermissions } = await import("./lib/claude-permissions.mjs");
+      json(res, getPermissions());
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "PUT" && path === "/api/claude/permissions") {
+    try {
+      const body = await readBody(req);
+      if (!Array.isArray(body?.tools)) {
+        json(res, { error: "tools array is required" }, 400);
+        return;
+      }
+      const { setPermissions } = await import("./lib/claude-permissions.mjs");
+      setPermissions(body.tools);
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
   // ── Tunnel URL ──
 
   if (method === "GET" && path === "/api/tunnel") {
@@ -1715,6 +1743,14 @@ async function checkVersionCompat() {
 
 async function startup() {
   await checkVersionCompat();
+
+  // Ensure Claude permissions default
+  try {
+    const { ensureDefaultPermissions } = await import("./lib/claude-permissions.mjs");
+    ensureDefaultPermissions();
+  } catch (err) {
+    console.log("[init] permissions check skipped:", err.message);
+  }
 
   // OAuth token check & refresh timer
   try {

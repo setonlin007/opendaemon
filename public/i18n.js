@@ -266,6 +266,16 @@ I18N._translations = {
     'saveFirst': 'Save first to test',
     'testing': 'Testing...',
 
+    // Permissions
+    'toolPermissions': 'Tool Permissions',
+    'permissionsGlobalNote': 'Global setting — applies to all Claude Code usage (including CLI)',
+    'presetAll': 'Allow All',
+    'presetReadonly': 'Read Only',
+    'presetCustom': 'Custom',
+    'permSaved': 'Permissions saved',
+    'permSaveFailed': 'Failed to save permissions',
+    'savePerm': 'Save Permissions',
+
     // File upload
     'uploadFailed': 'Upload failed',
     'compressionFailed': 'compression failed',
@@ -546,6 +556,16 @@ I18N._translations = {
     'switchFailed': '切换失败',
     'saveFirst': '请先保存再测试',
     'testing': '测试中...',
+
+    // Permissions
+    'toolPermissions': '工具权限',
+    'permissionsGlobalNote': '全局设置 — 影响所有 Claude Code 使用场景（包括 CLI）',
+    'presetAll': '全部允许',
+    'presetReadonly': '只读模式',
+    'presetCustom': '自定义',
+    'permSaved': '权限已保存',
+    'permSaveFailed': '保存权限失败',
+    'savePerm': '保存权限',
 
     // File upload
     'uploadFailed': '上传失败',
