@@ -65,10 +65,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .ws-dialog .ws-dialog-btns .ws-btn-cancel { background: var(--hover); color: var(--text-2); }
 .ws-dialog .ws-dialog-btns .ws-btn-ok { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; font-weight: 600; }
 .ws-path-wrapper { position: relative; }
-.ws-path-input-row { display: flex; gap: 6px; align-items: center; }
-.ws-path-input-row input { flex: 1; }
-.ws-path-home-btn { padding: 7px 10px; background: var(--hover); border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); font-size: 12px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all .15s; }
-.ws-path-home-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
 .ws-path-breadcrumb { display: flex; align-items: center; gap: 2px; margin-top: 6px; flex-wrap: wrap; min-height: 22px; }
 .ws-path-breadcrumb .ws-bc-seg { font-size: 11px; color: var(--accent); cursor: pointer; padding: 1px 4px; border-radius: 4px; }
 .ws-path-breadcrumb .ws-bc-seg:hover { background: var(--hover); }
@@ -5807,7 +5803,7 @@ let wsDialogMode = 'create';
 let wsDialogEditId = null;
 let _wsHomePath = ''; // cached server home directory
 
-async function openWsDialog(editId) {
+function openWsDialog(editId) {
   $('wsPopover').classList.remove('open');
   wsDialogMode = editId ? 'edit' : 'create';
   wsDialogEditId = editId || null;
@@ -5826,17 +5822,9 @@ async function openWsDialog(editId) {
   }
   $('wsDialogOverlay').classList.add('open');
   $('wsDialogName').focus();
-  // For new workspace: auto-fill home path and show directory listing
-  if (!editId) {
-    try {
-      const data = await api('GET', '/api/browse-dirs');
-      _wsHomePath = data.home || data.path || '';
-      if (_wsHomePath) {
-        $('wsDialogPath').value = _wsHomePath + '/';
-        updateWsBreadcrumb(_wsHomePath, true);
-        _renderWsSuggestions(data, data.dirs || []);
-      }
-    } catch {}
+  // Pre-fetch home directory
+  if (!_wsHomePath) {
+    api('GET', '/api/browse-dirs').then(d => { _wsHomePath = d.home || d.path || ''; }).catch(() => {});
   }
 }
 
@@ -5872,25 +5860,20 @@ function navigateWsPath(p) {
   onWsPathInput(p + '/');
 }
 
-// Home button → fill home path and browse
-async function onWsPathHomeClick() {
-  try {
-    const data = await api('GET', '/api/browse-dirs');
-    _wsHomePath = data.home || data.path || '';
-    if (_wsHomePath) {
-      $('wsDialogPath').value = _wsHomePath + '/';
-      $('wsDialogPath').focus();
-      _browseDirAndShow(_wsHomePath, '');
-      updateWsBreadcrumb(_wsHomePath, true);
-    }
-  } catch {}
-}
-
-// Focus on empty input → auto-browse home dir
-function onWsPathFocus() {
+// Focus on input → browse home dir (empty) or current path
+async function onWsPathFocus() {
   const val = $('wsDialogPath').value.trim();
   if (!val) {
-    onWsPathHomeClick();
+    // Empty input: show home directory contents
+    try {
+      const data = await api('GET', '/api/browse-dirs');
+      _wsHomePath = data.home || data.path || '';
+      updateWsBreadcrumb(data.path, true);
+      _renderWsSuggestions(data, data.dirs || []);
+    } catch {}
+  } else if (val.endsWith('/')) {
+    // Has path ending with /: show that directory's contents
+    _browseDirAndShow(val);
   }
 }
 
@@ -5905,13 +5888,12 @@ async function onWsPathInput(val) {
   }
   _wsPathTimer = setTimeout(async () => {
     try {
-      // If path ends with '/', browse that dir; otherwise browse parent dir
+      // If path ends with '/', browse that dir; otherwise browse parent and filter
       const browsePath = val.endsWith('/') ? val : val.substring(0, val.lastIndexOf('/') + 1);
       if (!browsePath) { sg.classList.remove('open'); return; }
       const data = await api('GET', `/api/browse-dirs?path=${encodeURIComponent(browsePath)}`);
-      // Update breadcrumb with resolved path and validity
-      const displayPath = val.endsWith('/') ? data.path : data.path.replace(/\/$/, '') + '/' + val.substring(val.lastIndexOf('/') + 1);
-      updateWsBreadcrumb(val.endsWith('/') ? data.path : val, data.valid);
+      // Update breadcrumb
+      updateWsBreadcrumb(data.path, data.valid);
       // Filter by typed partial name after last /
       const partial = val.endsWith('/') ? '' : val.substring(val.lastIndexOf('/') + 1).toLowerCase();
       const filtered = partial ? (data.dirs || []).filter(d => d.toLowerCase().startsWith(partial)) : (data.dirs || []);
@@ -5933,10 +5915,11 @@ function _renderWsSuggestions(data, filtered) {
   sg.classList.add('open');
 }
 
-// Browse a specific dir and show results (no filtering)
-async function _browseDirAndShow(dirPath, partial) {
+// Browse a specific dir and show results
+async function _browseDirAndShow(dirPath) {
   try {
     const data = await api('GET', `/api/browse-dirs?path=${encodeURIComponent(dirPath)}`);
+    updateWsBreadcrumb(data.path, data.valid);
     _renderWsSuggestions(data, data.dirs || []);
   } catch {}
 }
@@ -5944,9 +5927,8 @@ async function _browseDirAndShow(dirPath, partial) {
 function selectWsPath(p) {
   $('wsDialogPath').value = p + '/';
   $('wsPathSuggestions').classList.remove('open');
-  updateWsBreadcrumb(p, true);
-  // Trigger another browse of the selected dir
-  _browseDirAndShow(p + '/', '');
+  // Browse into the selected directory
+  _browseDirAndShow(p + '/');
   $('wsDialogPath').focus();
 }
 
@@ -6021,10 +6003,7 @@ init();
     <input id="wsDialogName" placeholder="e.g. My Project">
     <label>Path</label>
     <div class="ws-path-wrapper">
-      <div class="ws-path-input-row">
-        <input id="wsDialogPath" autocomplete="off" oninput="onWsPathInput(this.value)" onfocus="onWsPathFocus()">
-        <button class="ws-path-home-btn" onclick="onWsPathHomeClick()" title="Back to Home directory">&#8962;</button>
-      </div>
+      <input id="wsDialogPath" placeholder="Click to browse server directories..." autocomplete="off" oninput="onWsPathInput(this.value)" onfocus="onWsPathFocus()">
       <div class="ws-path-breadcrumb" id="wsPathBreadcrumb"></div>
       <div class="ws-path-suggestions" id="wsPathSuggestions"></div>
     </div>
