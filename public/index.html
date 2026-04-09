@@ -64,7 +64,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .ws-dialog .ws-dialog-btns button { padding: 7px 16px; border-radius: 8px; font-size: 12px; cursor: pointer; border: none; }
 .ws-dialog .ws-dialog-btns .ws-btn-cancel { background: var(--hover); color: var(--text-2); }
 .ws-dialog .ws-dialog-btns .ws-btn-ok { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; font-weight: 600; }
-.ws-path-wrapper { position: relative; }
+.ws-path-wrapper { }
+.ws-path-input-anchor { position: relative; }
 .ws-path-breadcrumb { display: flex; align-items: center; gap: 2px; margin-top: 6px; flex-wrap: wrap; min-height: 22px; }
 .ws-path-breadcrumb .ws-bc-seg { font-size: 11px; color: var(--accent); cursor: pointer; padding: 1px 4px; border-radius: 4px; }
 .ws-path-breadcrumb .ws-bc-seg:hover { background: var(--hover); }
@@ -6003,9 +6004,11 @@ init();
     <input id="wsDialogName" placeholder="e.g. My Project">
     <label>Path</label>
     <div class="ws-path-wrapper">
-      <input id="wsDialogPath" placeholder="Click to browse server directories..." autocomplete="off" oninput="onWsPathInput(this.value)" onfocus="onWsPathFocus()">
+      <div class="ws-path-input-anchor">
+        <input id="wsDialogPath" placeholder="Click to browse server directories..." autocomplete="off" oninput="onWsPathInput(this.value)" onfocus="onWsPathFocus()" onblur="setTimeout(()=>$('wsPathSuggestions').classList.remove('open'),150)">
+        <div class="ws-path-suggestions" id="wsPathSuggestions"></div>
+      </div>
       <div class="ws-path-breadcrumb" id="wsPathBreadcrumb"></div>
-      <div class="ws-path-suggestions" id="wsPathSuggestions"></div>
     </div>
     <div class="ws-dialog-btns">
       <button class="ws-btn-cancel" onclick="closeWsDialog()">Cancel</button>
