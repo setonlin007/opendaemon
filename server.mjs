@@ -27,6 +27,11 @@ import { shouldDispatch, dispatch, getOrchestratorConfig, AGENT_TYPES } from "./
 import { listSubAgentRuns, getEvaluations, getEvaluationStats, listExperiments as dbListExperiments } from "./lib/db.mjs";
 import { createExperiment, assignVariant, recordFeedback as abRecordFeedback, listExperiments, cancelExperiment, decideWinner } from "./lib/ab-testing.mjs";
 import { listSelfCodedTools, getToolDetail, validateTool, installTool, disableTool, enableTool } from "./lib/self-coder.mjs";
+import { getSocialConfigMasked, saveSocialConfig, deleteSocialConfig, handleWebhook, getLogs, clearLogs, PLATFORMS, registerAdapter, getAdapter, getAllAdapters, startAdapter, stopAdapter, setChatHandler, initSocialHub } from "./lib/social-hub.mjs";
+import { TelegramAdapter } from "./lib/social-adapters/telegram.mjs";
+import { FeishuAdapter } from "./lib/social-adapters/feishu.mjs";
+import { WecomAdapter } from "./lib/social-adapters/wecom.mjs";
+import { TwitterAdapter } from "./lib/social-adapters/twitter.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -326,6 +331,19 @@ const server = http.createServer(async (req, res) => {
       res.end();
     } catch (err) {
       json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // Webhook endpoints bypass auth (verified by each adapter's own mechanism)
+  if (method === "POST" && path.match(/^\/api\/webhook\/(\w+)$/)) {
+    const platform = path.split("/")[3];
+    try {
+      const body = await readBody(req);
+      const result = await handleWebhook(platform, req, body);
+      json(res, result);
+    } catch (err) {
+      json(res, { ok: false, error: err.message }, 500);
     }
     return;
   }
@@ -1571,6 +1589,91 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Social Platform Integration ──
+
+  if (method === "GET" && path === "/api/social/platforms") {
+    json(res, { platforms: PLATFORMS });
+    return;
+  }
+
+  if (method === "GET" && path === "/api/social/config") {
+    json(res, { config: getSocialConfigMasked(), adapters: getAllAdapters() });
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/social\/(\w+)\/config$/)) {
+    const platform = path.split("/")[3];
+    if (!PLATFORMS[platform]) { json(res, { error: "Unknown platform" }, 400); return; }
+    try {
+      const body = await readBody(req);
+      const saved = saveSocialConfig(platform, body);
+      json(res, { ok: true, config: saved });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "DELETE" && path.match(/^\/api\/social\/(\w+)\/config$/)) {
+    const platform = path.split("/")[3];
+    try {
+      deleteSocialConfig(platform);
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/social\/(\w+)\/test$/)) {
+    const platform = path.split("/")[3];
+    const adapter = getAdapter(platform);
+    if (!adapter) { json(res, { error: "Unknown platform" }, 400); return; }
+    try {
+      const body = await readBody(req);
+      const result = await adapter.testConnection(body);
+      json(res, result);
+    } catch (err) {
+      json(res, { ok: false, error: err.message });
+    }
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/social\/(\w+)\/start$/)) {
+    const platform = path.split("/")[3];
+    try {
+      await startAdapter(platform);
+      json(res, { ok: true, status: getAdapter(platform)?.getStatus() });
+    } catch (err) {
+      json(res, { ok: false, error: err.message });
+    }
+    return;
+  }
+
+  if (method === "POST" && path.match(/^\/api\/social\/(\w+)\/stop$/)) {
+    const platform = path.split("/")[3];
+    try {
+      await stopAdapter(platform);
+      json(res, { ok: true });
+    } catch (err) {
+      json(res, { ok: false, error: err.message });
+    }
+    return;
+  }
+
+  if (method === "GET" && path === "/api/social/logs") {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const limit = parseInt(url.searchParams.get("limit") || "50");
+    json(res, { logs: getLogs(limit) });
+    return;
+  }
+
+  if (method === "POST" && path === "/api/social/logs/clear") {
+    clearLogs();
+    json(res, { ok: true });
+    return;
+  }
+
   // ── Static files ──
 
   let filePath = path === "/" ? "/index.html" : path;
@@ -1777,6 +1880,63 @@ async function startup() {
   } catch (err) {
     console.error("[init] MCP server failed to start:", err.message);
     console.log("[init] continuing without MCP tools");
+  }
+
+  // ── Social platform adapters ──
+  try {
+    registerAdapter('telegram', new TelegramAdapter());
+    registerAdapter('feishu', new FeishuAdapter());
+    registerAdapter('wecom', new WecomAdapter());
+    registerAdapter('twitter', new TwitterAdapter());
+
+    // Chat handler: dispatches webhook messages to a default engine
+    setChatHandler(async (message) => {
+      try {
+        const defaultEngine = config.engines?.[0];
+        if (!defaultEngine) throw new Error("No engine configured");
+
+        // Create or reuse conversation for this platform+user
+        const socialConvKey = `social_${message.platform}_${message.userId}`;
+        let conv = listConversations().find(c => c.title === socialConvKey);
+        if (!conv) {
+          conv = createConversation(defaultEngine.id);
+          // Title it with the social key for lookup
+          const db = (await import("./lib/db.mjs")).getDb();
+          db.prepare("UPDATE conversations SET title = ? WHERE id = ?").run(socialConvKey, conv.id);
+        }
+
+        // Add user message
+        addMessage(conv.id, "user", message.text || "", { social: { platform: message.platform, userId: message.userId, chatId: message.chatId } });
+
+        // Build injected context
+        const injection = buildInjectedContext(message.text || "", { maxTokens: 2000, convId: conv.id });
+
+        const engine = getEngineById(conv.engine_id) || defaultEngine;
+
+        // Collect reply text (non-streaming)
+        let replyText = "";
+        const onEvent = (event, data) => {
+          if (event === "delta" && data.text) replyText += data.text;
+          if (event === "result" && data.result) replyText = data.result;
+        };
+
+        const handler = getEngineHandler(engine.type);
+        if (handler) {
+          await handler.handleChat(conv, engine, message.text || "", onEvent, null, injection.context, [], serverDeps);
+        }
+
+        return replyText || "(no response)";
+      } catch (err) {
+        console.error(`[social-chat] error:`, err.message);
+        return `Error: ${err.message}`;
+      }
+    });
+
+    await initSocialHub();
+    const adapterCount = getAllAdapters().filter(a => a.status.status === 'running').length;
+    if (adapterCount > 0) console.log(`[social-hub] ${adapterCount} adapter(s) running`);
+  } catch (err) {
+    console.log("[social-hub] init skipped:", err.message);
   }
 
   // Start evaluator background loop (Phase 4)

@@ -2023,6 +2023,7 @@ return He}()
       <div class="about-nav-item" onclick="switchAboutTab('changelog',this)" data-i18n="aboutChangelog">版本历史</div>
       <div style="flex:1"></div>
       <div class="about-nav-item" onclick="switchAboutTab('engines',this)" data-i18n="engines" style="color:var(--text-2);">⚙️ Engines</div>
+      <div class="about-nav-item" onclick="switchAboutTab('social',this)" style="color:var(--text-2);">🔌 Channels</div>
       <div class="about-nav-item" onclick="switchAboutTab('access',this)" data-i18n="accessLink" style="color:var(--text-2);">🔗 Access</div>
     </div>
     <div class="about-body" id="aboutBody"></div>
@@ -3592,6 +3593,10 @@ function switchAboutTab(tab, el) {
     body.innerHTML = '<div id="engBodyInline" style="padding:0"><div style="text-align:center;padding:20px;color:var(--text-3)">Loading...</div></div>';
     renderEnginesInline();
   }
+  else if (tab === 'social') {
+    body.innerHTML = '<div id="socialBodyInline" style="padding:0"><div style="text-align:center;padding:20px;color:var(--text-3)">Loading...</div></div>';
+    renderSocialInline();
+  }
   else if (tab === 'access') {
     body.innerHTML = '<div id="accessBodyInline" style="padding:0"><div style="text-align:center;padding:20px;color:var(--text-3)">Loading...</div></div>';
     renderAccessInline();
@@ -3614,6 +3619,213 @@ async function renderEnginesInline() {
     body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px">Failed to load engines: ${esc(err.message)}</div>`;
   }
 }
+async function renderSocialInline() {
+  const body = $('socialBodyInline');
+  if (!body) return;
+  try {
+    const [platformsRes, configRes] = await Promise.all([
+      api('GET', '/api/social/platforms'),
+      api('GET', '/api/social/config'),
+    ]);
+    const platforms = platformsRes.platforms || {};
+    const configs = configRes.config || {};
+    const adapters = configRes.adapters || [];
+
+    let html = '<div style="padding:4px 0;">';
+    html += '<div style="font-size:12px;color:var(--text-3);margin-bottom:12px;">接收来自社交平台的消息，通过 AI 引擎自动回复。</div>';
+
+    // Platform cards
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px;">';
+    for (const [pid, pdef] of Object.entries(platforms)) {
+      const cfg = configs[pid] || {};
+      const adapterInfo = adapters.find(a => a.platform === pid);
+      const status = adapterInfo?.status?.status || 'stopped';
+      const isEnabled = cfg.enabled === true;
+      const isConfigured = Object.keys(cfg).length > 0;
+      const dotColor = status === 'running' ? '#4ade80' : (isConfigured ? '#facc15' : 'var(--text-3)');
+      const statusText = status === 'running' ? '运行中' : (isConfigured ? '已配置' : '未配置');
+      html += `<div style="background:var(--input-bg);border-radius:10px;padding:14px;cursor:pointer;border:1px solid var(--border);transition:all 0.15s;" onclick="showSocialConfig('${pid}')" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="font-size:22px;margin-bottom:6px;">${esc(pdef.icon)}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${esc(pdef.name)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${esc(pdef.description)}</div>
+        <div style="margin-top:8px;font-size:11px;display:flex;align-items:center;gap:5px;">
+          <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${dotColor};"></span>
+          <span style="color:var(--text-3);">${statusText}</span>
+        </div>
+      </div>`;
+    }
+    html += '</div>';
+
+    // Logs section
+    html += `<div style="margin-top:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:600;color:var(--text-2);">接入日志</span>
+        <button onclick="clearSocialLogs()" style="font-size:11px;background:none;border:none;color:var(--text-3);cursor:pointer;">清空</button>
+      </div>
+      <div id="socialLogsContainer" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;max-height:180px;overflow-y:auto;font-size:11px;font-family:monospace;"></div>
+    </div>`;
+    html += '</div>';
+
+    body.innerHTML = html;
+    loadSocialLogs();
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px">Failed to load: ${esc(err.message)}</div>`;
+  }
+}
+
+async function loadSocialLogs() {
+  const container = $('socialLogsContainer');
+  if (!container) return;
+  try {
+    const res = await api('GET', '/api/social/logs?limit=30');
+    const logs = res.logs || [];
+    if (logs.length === 0) {
+      container.innerHTML = '<div style="padding:12px;color:var(--text-3);text-align:center;">暂无日志</div>';
+      return;
+    }
+    container.innerHTML = logs.map(l => {
+      const time = new Date(l.timestamp).toLocaleTimeString();
+      const icon = l.direction === 'in' ? '📥' : l.direction === 'out' ? '📤' : '⚠️';
+      const color = l.direction === 'error' ? '#f87171' : 'var(--text-3)';
+      return `<div style="padding:4px 10px;border-bottom:1px solid var(--border);color:${color};">${icon} <span style="color:var(--text-3)">${time}</span> [${esc(l.platform)}] ${esc(l.summary)}</div>`;
+    }).join('');
+  } catch { container.innerHTML = ''; }
+}
+
+async function clearSocialLogs() {
+  try { await api('POST', '/api/social/logs/clear'); loadSocialLogs(); } catch {}
+}
+
+async function showSocialConfig(platform) {
+  try {
+    const [platformsRes, configRes] = await Promise.all([
+      api('GET', '/api/social/platforms'),
+      api('GET', '/api/social/config'),
+    ]);
+    const pdef = platformsRes.platforms?.[platform];
+    if (!pdef) return;
+    const cfg = configRes.config?.[platform] || {};
+    const adapterInfo = (configRes.adapters || []).find(a => a.platform === platform);
+    const status = adapterInfo?.status?.status || 'stopped';
+
+    let html = `<div style="padding:4px 0;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <button onclick="renderSocialInline()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:16px;">←</button>
+        <span style="font-size:20px;">${esc(pdef.icon)}</span>
+        <span style="font-size:14px;font-weight:600;color:var(--text);">${esc(pdef.name)}</span>
+        ${status === 'running' ? '<span style="font-size:11px;color:#4ade80;">● 运行中</span>' : ''}
+      </div>
+      <form id="socialConfigForm" onsubmit="saveSocialConfigForm(event,'${platform}')">`;
+
+    // Render fields from platform definition
+    for (const field of pdef.fields) {
+      const val = cfg[field.key] || field.default || '';
+      if (field.type === 'select') {
+        html += `<div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:var(--text-2);display:block;margin-bottom:3px;">${esc(field.label)}</label>
+          <select name="${field.key}" style="width:100%;padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;">
+            ${(field.options || []).map(o => `<option value="${o.value}" ${val === o.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+          </select>
+        </div>`;
+      } else {
+        const inputType = field.type === 'password' ? 'password' : 'text';
+        html += `<div style="margin-bottom:10px;">
+          <label style="font-size:12px;color:var(--text-2);display:block;margin-bottom:3px;">${esc(field.label)} ${field.required ? '<span style="color:#f87171">*</span>' : ''}</label>
+          <input name="${field.key}" type="${inputType}" value="${esc(String(val))}" placeholder="${esc(field.hint || '')}" style="width:100%;padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;box-sizing:border-box;" />
+          ${field.hint ? `<div style="font-size:10px;color:var(--text-3);margin-top:2px;">${esc(field.hint)}</div>` : ''}
+        </div>`;
+      }
+    }
+
+    // Enable toggle
+    html += `<div style="margin:14px 0;display:flex;align-items:center;gap:8px;">
+      <label style="font-size:12px;color:var(--text-2);">启用</label>
+      <input type="checkbox" name="enabled" ${cfg.enabled ? 'checked' : ''} style="accent-color:var(--accent);" />
+    </div>`;
+
+    // Webhook URL hint
+    html += `<div style="font-size:11px;color:var(--text-3);margin-bottom:12px;padding:8px;background:var(--bg);border-radius:6px;">
+      Webhook URL: <code style="color:var(--accent);">/api/webhook/${platform}</code><br>
+      配置到平台后台的回调地址。需要公网可访问（可通过 Access → Tunnel）。
+    </div>`;
+
+    // Action buttons
+    html += `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="submit" style="padding:8px 20px;background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:12px;cursor:pointer;">保存</button>
+      <button type="button" onclick="testSocialConnection('${platform}')" style="padding:8px 16px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-2);font-size:12px;cursor:pointer;">测试连接</button>`;
+    if (status === 'running') {
+      html += `<button type="button" onclick="toggleSocialAdapter('${platform}','stop')" style="padding:8px 16px;background:none;border:1px solid #f87171;border-radius:6px;color:#f87171;font-size:12px;cursor:pointer;">停止</button>`;
+    } else if (cfg.enabled) {
+      html += `<button type="button" onclick="toggleSocialAdapter('${platform}','start')" style="padding:8px 16px;background:none;border:1px solid #4ade80;border-radius:6px;color:#4ade80;font-size:12px;cursor:pointer;">启动</button>`;
+    }
+    if (Object.keys(cfg).length > 0) {
+      html += `<button type="button" onclick="deleteSocialPlatform('${platform}')" style="padding:8px 16px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-3);font-size:12px;cursor:pointer;margin-left:auto;">删除配置</button>`;
+    }
+    html += `</div>
+      <div id="socialTestResult" style="margin-top:8px;font-size:12px;"></div>
+      </form></div>`;
+
+    $('socialBodyInline').innerHTML = html;
+  } catch (err) {
+    alert('Failed: ' + err.message);
+  }
+}
+
+async function saveSocialConfigForm(e, platform) {
+  e.preventDefault();
+  const form = e.target;
+  const data = {};
+  for (const field of new FormData(form)) {
+    data[field[0]] = field[1];
+  }
+  // Handle checkbox
+  data.enabled = form.querySelector('[name="enabled"]').checked;
+  try {
+    await api('POST', `/api/social/${platform}/config`, data);
+    $('socialTestResult').innerHTML = '<span style="color:#4ade80;">✓ 已保存</span>';
+    setTimeout(() => showSocialConfig(platform), 800);
+  } catch (err) {
+    $('socialTestResult').innerHTML = `<span style="color:#f87171;">✕ ${esc(err.message)}</span>`;
+  }
+}
+
+async function testSocialConnection(platform) {
+  const form = $('socialConfigForm');
+  const data = {};
+  for (const field of new FormData(form)) { data[field[0]] = field[1]; }
+  data.enabled = form.querySelector('[name="enabled"]').checked;
+  $('socialTestResult').innerHTML = '<span style="color:var(--text-3);">Testing...</span>';
+  try {
+    const res = await api('POST', `/api/social/${platform}/test`, data);
+    if (res.ok) {
+      $('socialTestResult').innerHTML = `<span style="color:#4ade80;">✓ 连接成功${res.info ? ' — ' + esc(res.info) : ''}</span>`;
+    } else {
+      $('socialTestResult').innerHTML = `<span style="color:#f87171;">✕ ${esc(res.error || 'Failed')}</span>`;
+    }
+  } catch (err) {
+    $('socialTestResult').innerHTML = `<span style="color:#f87171;">✕ ${esc(err.message)}</span>`;
+  }
+}
+
+async function toggleSocialAdapter(platform, action) {
+  try {
+    await api('POST', `/api/social/${platform}/${action}`);
+    showSocialConfig(platform);
+  } catch (err) {
+    alert('Failed: ' + err.message);
+  }
+}
+
+async function deleteSocialPlatform(platform) {
+  if (!confirm('确定删除该平台的所有配置？')) return;
+  try {
+    await api('DELETE', `/api/social/${platform}/config`);
+    renderSocialInline();
+  } catch (err) {
+    alert('Failed: ' + err.message);
+  }
+}
+
 async function renderAccessInline() {
   const body = $('accessBodyInline');
   if (!body) return;
