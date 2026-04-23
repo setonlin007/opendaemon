@@ -968,9 +968,14 @@ const server = http.createServer(async (req, res) => {
   // ── Image Generation (ComfyUI) ──
 
   if (method === "POST" && path === "/api/image/generate") {
+    const tReq = Date.now();
+    let convIdForLog = null;
+    let userMsgId = null;
+    let createMessagesFlag = true;
     try {
       const body = await readBody(req);
       if (!body || typeof body !== "object") {
+        console.log("[image/generate] reject: invalid JSON body");
         json(res, { error: "invalid JSON body" }, 400);
         return;
       }
@@ -987,11 +992,48 @@ const server = http.createServer(async (req, res) => {
         use_lightning = false,
         create_messages = true, // 是否自动插入 user + assistant 消息
       } = body;
+      convIdForLog = conv_id;
+      createMessagesFlag = create_messages;
 
-      if (!conv_id) { json(res, { error: "conv_id required" }, 400); return; }
-      if (!prompt) { json(res, { error: "prompt required" }, 400); return; }
+      // Insert assistant failure message so user sees what went wrong on refresh
+      const insertFailureMsg = (errMsg) => {
+        if (!create_messages || !userMsgId) return;
+        try {
+          addMessage(conv_id, "assistant", `❌ 生图失败: ${errMsg}`,
+            { type: "image_gen_error", error: errMsg });
+        } catch (e) {
+          console.warn("[image/generate] 插入失败消息失败", e.message);
+        }
+      };
+
+      if (!conv_id) {
+        console.log("[image/generate] reject: missing conv_id");
+        json(res, { error: "conv_id required" }, 400); return;
+      }
+      if (!prompt) {
+        console.log(`[image/generate] reject conv=${conv_id}: missing prompt`);
+        json(res, { error: "prompt required" }, 400); return;
+      }
       const conv = getConversation(conv_id);
-      if (!conv) { json(res, { error: "conversation not found" }, 404); return; }
+      if (!conv) {
+        console.log(`[image/generate] reject conv=${conv_id}: conversation not found`);
+        json(res, { error: "conversation not found" }, 404); return;
+      }
+
+      console.log(`[image/generate] start conv=${conv_id} mode=${mode} ref=${ref_attachment_id || 'none'} promptLen=${prompt.length}`);
+
+      // ─── Persist user message immediately (before any long-running work) ───
+      if (create_messages) {
+        try {
+          const userMsg = addMessage(conv_id, "user",
+            `/image ${mode}${ref_attachment_id ? ` @${ref_attachment_id.substring(0, 8)}` : ""}\n${prompt}`,
+            { type: "image_gen_command", mode, ref_attachment_id, status: "generating" });
+          userMsgId = userMsg.id;
+          if (ref_attachment_id) linkAttachmentsToMessage([ref_attachment_id], userMsgId);
+        } catch (e) {
+          console.warn("[image/generate] 插入用户消息失败", e.message);
+        }
+      }
 
       // 读 imagegen 配置（可能为空，使用默认）
       const cfg = loadConfig();
@@ -1006,27 +1048,35 @@ const server = http.createServer(async (req, res) => {
       // 速率限制
       const rl = _checkImageRateLimit(conv_id, limits);
       if (!rl.allowed) {
-        json(res, { error: rl.reason }, 429);
-        return;
+        console.log(`[image/generate] reject conv=${conv_id}: rate-limit ${rl.reason}`);
+        insertFailureMsg(rl.reason);
+        json(res, { error: rl.reason }, 429); return;
       }
 
       // ref 属主校验：必须属于同一会话
       if (ref_attachment_id) {
         const ra = getAttachment(ref_attachment_id);
         if (!ra) {
-          json(res, { error: `ref attachment ${ref_attachment_id} not found` }, 404);
-          return;
+          const msg = `ref attachment ${ref_attachment_id} not found`;
+          console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 404); return;
         }
         if (ra.conv_id !== conv_id) {
-          json(res, { error: "ref attachment 不属于当前会话，拒绝跨会话引用" }, 403);
-          return;
+          const msg = "ref attachment 不属于当前会话，拒绝跨会话引用";
+          console.log(`[image/generate] reject conv=${conv_id}: cross-conv ref`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 403); return;
         }
       }
 
       // 预检 ComfyUI
+      console.log(`[image/generate] conv=${conv_id} ping comfy=${comfyUrl}`);
       if (!(await comfyPing(comfyUrl, 3000))) {
-        json(res, { error: `ComfyUI 不可达 (${comfyUrl})，请先启动 ComfyUI 或在设置里改 URL` }, 503);
-        return;
+        const msg = `ComfyUI 不可达 (${comfyUrl})，请先启动 ComfyUI 或在设置里改 URL`;
+        console.log(`[image/generate] reject conv=${conv_id}: ComfyUI unreachable`);
+        insertFailureMsg(msg);
+        json(res, { error: msg }, 503); return;
       }
 
       // 分辨率解析
@@ -1050,17 +1100,26 @@ const server = http.createServer(async (req, res) => {
       if (ref_attachment_id) {
         const refAtt = getAttachment(ref_attachment_id);  // 上面已校验存在
         const refBuf = getAttachmentBuffer(ref_attachment_id);
-        if (!refBuf) { json(res, { error: "ref attachment file missing on disk" }, 404); return; }
+        if (!refBuf) {
+          const msg = "ref attachment file missing on disk";
+          console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 404); return;
+        }
         const comfyFn = `od_ref_${ref_attachment_id}.${(refAtt.filename.split('.').pop() || 'png')}`;
         try {
           refImageName = await uploadImageToComfy(refBuf, comfyFn, comfyUrl);
         } catch (e) {
-          json(res, { error: `ComfyUI 上传参考图失败: ${e.message}` }, 502);
-          return;
+          const msg = `ComfyUI 上传参考图失败: ${e.message}`;
+          console.log(`[image/generate] conv=${conv_id} ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 502); return;
         }
       } else if (mode !== "txt2img") {
-        json(res, { error: `mode '${mode}' 需要 ref_attachment_id` }, 400);
-        return;
+        const msg = `mode '${mode}' 需要 ref_attachment_id`;
+        console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+        insertFailureMsg(msg);
+        json(res, { error: msg }, 400); return;
       }
 
       // 中文 prompt 自动翻译成英文（用 config 里第一个 openai 引擎，如 kimi-k2）
@@ -1099,16 +1158,20 @@ const server = http.createServer(async (req, res) => {
       let promptId, output;
       try {
         promptId = await comfySubmitPrompt(workflow, comfyUrl);
+        console.log(`[image/generate] conv=${conv_id} submitted promptId=${promptId}`);
         _markImageGenStart(conv_id, promptId);
         try {
           output = await comfyPollUntilComplete(promptId, comfyUrl, 1800000 /* 30 min */);
+          console.log(`[image/generate] conv=${conv_id} poll done promptId=${promptId} genDur=${Date.now()-t0}ms`);
         } finally {
           _markImageGenEnd(conv_id);
         }
       } catch (e) {
         _markImageGenEnd(conv_id);  // 出错也要释放并发锁
-        json(res, { error: `ComfyUI 执行失败: ${e.message}` }, 502);
-        return;
+        const msg = `ComfyUI 执行失败: ${e.message}`;
+        console.log(`[image/generate] conv=${conv_id} ${msg}`);
+        insertFailureMsg(msg);
+        json(res, { error: msg }, 502); return;
       }
 
       // 下载结果 + 存为 attachment
@@ -1128,16 +1191,10 @@ const server = http.createServer(async (req, res) => {
         console.warn("[image/generate] 保存 metadata 失败", e.message);
       }
 
-      // 可选：插入消息，让生成结果直接出现在对话流里
-      let userMsgId = null, asstMsgId = null;
+      // 插入 assistant 成功消息（user 消息已在开头落库）
+      let asstMsgId = null;
       if (create_messages) {
         try {
-          const userMsg = addMessage(conv_id, "user",
-            `/image ${mode}${ref_attachment_id ? ` @${ref_attachment_id.substring(0, 8)}` : ""}\n${prompt}`,
-            { type: "image_gen_command", mode, ref_attachment_id });
-          userMsgId = userMsg.id;
-          if (ref_attachment_id) linkAttachmentsToMessage([ref_attachment_id], userMsgId);
-
           const asstContent = `🎨 已生成图片\n\n![](/api/uploads/${att.id})\n\n` +
             `参数: mode=${mode}, weight=${finalWeight}, steps=${steps}, seed=${finalSeed}, ` +
             `resolution=${resolution}, time=${Math.round((Date.now()-t0)/1000)}s`;
@@ -1146,12 +1203,13 @@ const server = http.createServer(async (req, res) => {
           asstMsgId = asstMsg.id;
           linkAttachmentsToMessage([att.id], asstMsgId);
         } catch (e) {
-          console.warn("[image/generate] 插入消息失败", e.message);
+          console.warn("[image/generate] 插入助手消息失败", e.message);
         }
       } else {
         linkAttachmentsToMessage([att.id], null);
       }
 
+      console.log(`[image/generate] done conv=${conv_id} att=${att.id} promptId=${promptId} total=${Date.now()-tReq}ms`);
       json(res, {
         attachment_id: att.id,
         attachment: att,
@@ -1163,7 +1221,14 @@ const server = http.createServer(async (req, res) => {
         duration_ms: Date.now() - t0,
       });
     } catch (err) {
-      console.error("[image/generate] error:", err);
+      console.error(`[image/generate] error conv=${convIdForLog}:`, err);
+      // Best-effort failure message — only if we managed to insert a user msg
+      if (createMessagesFlag && userMsgId && convIdForLog) {
+        try {
+          addMessage(convIdForLog, "assistant", `❌ 生图失败: ${err.message}`,
+            { type: "image_gen_error", error: err.message });
+        } catch {}
+      }
       json(res, { error: err.message }, 500);
     }
     return;
