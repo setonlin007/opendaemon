@@ -969,7 +969,11 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "POST" && path === "/api/image/generate") {
     try {
-      const body = JSON.parse(await readBody(req));
+      const body = await readBody(req);
+      if (!body || typeof body !== "object") {
+        json(res, { error: "invalid JSON body" }, 400);
+        return;
+      }
       const {
         conv_id,
         prompt,
@@ -1168,8 +1172,8 @@ const server = http.createServer(async (req, res) => {
   // ── Image generation: cancel current ──
   if (method === "POST" && path === "/api/image/cancel") {
     try {
-      const body = JSON.parse(await readBody(req));
-      const convId = body.conv_id;
+      const body = await readBody(req);
+      const convId = body?.conv_id;
       if (!convId) { json(res, { error: "conv_id required" }, 400); return; }
       const activePromptId = _getActivePromptId(convId);
       if (!activePromptId) {
