@@ -19,6 +19,7 @@ import { loadPlugins } from "./lib/plugin-loader.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
 import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST, updateAttachmentMetadata } from "./lib/attachments.mjs";
 import { buildWorkflow, uploadImageToComfy, submitPrompt as comfySubmitPrompt, pollUntilComplete as comfyPollUntilComplete, downloadOutput as comfyDownloadOutput, ping as comfyPing, DEFAULT_COMFY_URL } from "./lib/comfyui.mjs";
+import { translateIfChinese } from "./lib/prompt-translator.mjs";
 
 // ── 生图速率限制 & 活跃追踪 ──
 const _imageGenState = {
@@ -1058,11 +1059,29 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // 中文 prompt 自动翻译成英文（用 config 里第一个 openai 引擎，如 kimi-k2）
+      let finalPositive = prompt;
+      let finalNegative = negative_prompt;
+      let translatedFrom = null;
+      try {
+        const [tPos, tNeg] = await Promise.all([
+          translateIfChinese(prompt),
+          translateIfChinese(negative_prompt),
+        ]);
+        if (tPos !== prompt) {
+          translatedFrom = prompt;
+          finalPositive = tPos;
+        }
+        if (tNeg !== negative_prompt) finalNegative = tNeg;
+      } catch (e) {
+        console.warn("[image/generate] 翻译失败，用原文:", e.message);
+      }
+
       // 构造工作流
       const { workflow, seed: finalSeed } = buildWorkflow(mode, {
         refImage: refImageName,
-        positive: prompt,
-        negative: negative_prompt,
+        positive: finalPositive,
+        negative: finalNegative,
         width: resSpec.width,
         height: resSpec.height,
         steps,
@@ -1092,7 +1111,10 @@ const server = http.createServer(async (req, res) => {
       const pngBuf = await comfyDownloadOutput(output.filename, output.subfolder, comfyUrl);
       const att = saveAttachment(conv_id, output.filename, "image/png", pngBuf);
       const metaJson = JSON.stringify({
-        prompt, negative_prompt, mode, ref_attachment_id: ref_attachment_id || null,
+        prompt: finalPositive,
+        prompt_original: translatedFrom || undefined,
+        negative_prompt: finalNegative,
+        mode, ref_attachment_id: ref_attachment_id || null,
         weight: finalWeight, steps, seed: finalSeed, resolution, use_lightning,
         comfy_prompt_id: promptId, generated_at: t0,
       });
