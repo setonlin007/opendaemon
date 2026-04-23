@@ -1175,7 +1175,17 @@ const server = http.createServer(async (req, res) => {
       }
 
       // 下载结果 + 存为 attachment
-      const pngBuf = await comfyDownloadOutput(output.filename, output.subfolder, comfyUrl);
+      console.log(`[image/generate] conv=${conv_id} downloading output filename=${output.filename}`);
+      let pngBuf;
+      try {
+        pngBuf = await comfyDownloadOutput(output.filename, output.subfolder, comfyUrl);
+        console.log(`[image/generate] conv=${conv_id} downloaded ${pngBuf.length} bytes`);
+      } catch (e) {
+        const msg = `下载生成图失败: ${e.message}`;
+        console.log(`[image/generate] conv=${conv_id} ${msg}`);
+        insertFailureMsg(msg);
+        json(res, { error: msg }, 502); return;
+      }
       const att = saveAttachment(conv_id, output.filename, "image/png", pngBuf);
       const metaJson = JSON.stringify({
         prompt: finalPositive,
