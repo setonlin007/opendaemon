@@ -17,7 +17,51 @@ import { MCPManager } from "./lib/mcp-manager.mjs";
 import { registerEngine, getEngineHandler, getRegisteredEngines } from "./lib/engine-registry.mjs";
 import { loadPlugins } from "./lib/plugin-loader.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
-import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST } from "./lib/attachments.mjs";
+import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST, updateAttachmentMetadata } from "./lib/attachments.mjs";
+import { buildWorkflow, uploadImageToComfy, submitPrompt as comfySubmitPrompt, pollUntilComplete as comfyPollUntilComplete, downloadOutput as comfyDownloadOutput, ping as comfyPing, DEFAULT_COMFY_URL } from "./lib/comfyui.mjs";
+
+// ── 生图速率限制 & 活跃追踪 ──
+const _imageGenState = {
+  activeByConv: new Map(),          // conv_id → {promptId, startedAt}
+  windowByConv: new Map(),          // conv_id → [timestamps within 1h]
+  dailyCount: 0,
+  dailyResetAt: Date.now() + 86400000,
+};
+function _checkImageRateLimit(convId, limits) {
+  const now = Date.now();
+  // 每日重置
+  if (now > _imageGenState.dailyResetAt) {
+    _imageGenState.dailyCount = 0;
+    _imageGenState.dailyResetAt = now + 86400000;
+  }
+  // 全局日配额
+  if (_imageGenState.dailyCount >= limits.maxPerDay) {
+    return { allowed: false, reason: `今日生图总数已达上限 ${limits.maxPerDay}，明天再试` };
+  }
+  // 会话并发
+  if (_imageGenState.activeByConv.has(convId)) {
+    return { allowed: false, reason: "此会话已有生图任务在跑，请等完成或取消" };
+  }
+  // 每小时窗口
+  const window = (_imageGenState.windowByConv.get(convId) || []).filter(t => now - t < 3600000);
+  if (window.length >= limits.maxPerHour) {
+    return { allowed: false, reason: `此会话过去 1 小时已生图 ${window.length} 次，达到上限 ${limits.maxPerHour}` };
+  }
+  return { allowed: true };
+}
+function _markImageGenStart(convId, promptId) {
+  _imageGenState.activeByConv.set(convId, { promptId, startedAt: Date.now() });
+  const window = _imageGenState.windowByConv.get(convId) || [];
+  window.push(Date.now());
+  _imageGenState.windowByConv.set(convId, window);
+  _imageGenState.dailyCount++;
+}
+function _markImageGenEnd(convId) {
+  _imageGenState.activeByConv.delete(convId);
+}
+function _getActivePromptId(convId) {
+  return _imageGenState.activeByConv.get(convId)?.promptId || null;
+}
 import { parseMultipart } from "./lib/multipart.mjs";
 import { initKnowledge, listKnowledge, getKnowledgeContent, updateKnowledge, deleteKnowledge, syncWorkspaceKnowledge, rebuildFtsIndex } from "./lib/knowledge.mjs";
 import { buildInjectedContext } from "./lib/injector.mjs";
@@ -917,6 +961,236 @@ const server = http.createServer(async (req, res) => {
       "Cache-Control": "private, max-age=86400",
     });
     res.end(buffer);
+    return;
+  }
+
+  // ── Image Generation (ComfyUI) ──
+
+  if (method === "POST" && path === "/api/image/generate") {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const {
+        conv_id,
+        prompt,
+        negative_prompt = "",
+        mode = "plus_face",
+        ref_attachment_id,
+        weight,
+        steps = 25,
+        seed,
+        resolution = "lite_portrait",
+        use_lightning = false,
+        create_messages = true, // 是否自动插入 user + assistant 消息
+      } = body;
+
+      if (!conv_id) { json(res, { error: "conv_id required" }, 400); return; }
+      if (!prompt) { json(res, { error: "prompt required" }, 400); return; }
+      const conv = getConversation(conv_id);
+      if (!conv) { json(res, { error: "conversation not found" }, 404); return; }
+
+      // 读 imagegen 配置（可能为空，使用默认）
+      const cfg = loadConfig();
+      const imagegen = cfg.imagegen || {};
+      const comfyUrl = imagegen.comfyUrl || DEFAULT_COMFY_URL;
+      const limits = {
+        maxConcurrent: imagegen.maxConcurrent ?? 1,
+        maxPerHour: imagegen.maxPerHour ?? 10,
+        maxPerDay: imagegen.maxPerDay ?? 50,
+      };
+
+      // 速率限制
+      const rl = _checkImageRateLimit(conv_id, limits);
+      if (!rl.allowed) {
+        json(res, { error: rl.reason }, 429);
+        return;
+      }
+
+      // ref 属主校验：必须属于同一会话
+      if (ref_attachment_id) {
+        const ra = getAttachment(ref_attachment_id);
+        if (!ra) {
+          json(res, { error: `ref attachment ${ref_attachment_id} not found` }, 404);
+          return;
+        }
+        if (ra.conv_id !== conv_id) {
+          json(res, { error: "ref attachment 不属于当前会话，拒绝跨会话引用" }, 403);
+          return;
+        }
+      }
+
+      // 预检 ComfyUI
+      if (!(await comfyPing(comfyUrl, 3000))) {
+        json(res, { error: `ComfyUI 不可达 (${comfyUrl})，请先启动 ComfyUI 或在设置里改 URL` }, 503);
+        return;
+      }
+
+      // 分辨率解析
+      const RESOLUTIONS = {
+        lite_portrait: { width: 768, height: 1024 },
+        lite_square:   { width: 768, height: 768 },
+        portrait:      { width: 896, height: 1152 },
+        square:        { width: 1024, height: 1024 },
+        landscape:     { width: 1152, height: 896 },
+      };
+      const resSpec = RESOLUTIONS[resolution] || RESOLUTIONS.lite_portrait;
+
+      // mode weight 默认值
+      const MODE_WEIGHT_DEFAULT = {
+        plus_face: 0.85, faceid: 1.1, faceid_plus: 1.0, ipadapter: 0.8, txt2img: 1.0,
+      };
+      const finalWeight = weight ?? MODE_WEIGHT_DEFAULT[mode] ?? 1.0;
+
+      // 如果有参考图，读取字节并上传到 ComfyUI
+      let refImageName = null;
+      if (ref_attachment_id) {
+        const refAtt = getAttachment(ref_attachment_id);  // 上面已校验存在
+        const refBuf = getAttachmentBuffer(ref_attachment_id);
+        if (!refBuf) { json(res, { error: "ref attachment file missing on disk" }, 404); return; }
+        const comfyFn = `od_ref_${ref_attachment_id}.${(refAtt.filename.split('.').pop() || 'png')}`;
+        try {
+          refImageName = await uploadImageToComfy(refBuf, comfyFn, comfyUrl);
+        } catch (e) {
+          json(res, { error: `ComfyUI 上传参考图失败: ${e.message}` }, 502);
+          return;
+        }
+      } else if (mode !== "txt2img") {
+        json(res, { error: `mode '${mode}' 需要 ref_attachment_id` }, 400);
+        return;
+      }
+
+      // 构造工作流
+      const { workflow, seed: finalSeed } = buildWorkflow(mode, {
+        refImage: refImageName,
+        positive: prompt,
+        negative: negative_prompt,
+        width: resSpec.width,
+        height: resSpec.height,
+        steps,
+        seed,
+        weight: finalWeight,
+        useLightning: use_lightning,
+      });
+
+      // 提交 + 轮询（同步等完成）
+      const t0 = Date.now();
+      let promptId, output;
+      try {
+        promptId = await comfySubmitPrompt(workflow, comfyUrl);
+        _markImageGenStart(conv_id, promptId);
+        try {
+          output = await comfyPollUntilComplete(promptId, comfyUrl, 1800000 /* 30 min */);
+        } finally {
+          _markImageGenEnd(conv_id);
+        }
+      } catch (e) {
+        _markImageGenEnd(conv_id);  // 出错也要释放并发锁
+        json(res, { error: `ComfyUI 执行失败: ${e.message}` }, 502);
+        return;
+      }
+
+      // 下载结果 + 存为 attachment
+      const pngBuf = await comfyDownloadOutput(output.filename, output.subfolder, comfyUrl);
+      const att = saveAttachment(conv_id, output.filename, "image/png", pngBuf);
+      const metaJson = JSON.stringify({
+        prompt, negative_prompt, mode, ref_attachment_id: ref_attachment_id || null,
+        weight: finalWeight, steps, seed: finalSeed, resolution, use_lightning,
+        comfy_prompt_id: promptId, generated_at: t0,
+      });
+      try {
+        updateAttachmentMetadata(att.id, metaJson);
+      } catch (e) {
+        console.warn("[image/generate] 保存 metadata 失败", e.message);
+      }
+
+      // 可选：插入消息，让生成结果直接出现在对话流里
+      let userMsgId = null, asstMsgId = null;
+      if (create_messages) {
+        try {
+          const userMsg = addMessage(conv_id, "user",
+            `/image ${mode}${ref_attachment_id ? ` @${ref_attachment_id.substring(0, 8)}` : ""}\n${prompt}`,
+            { type: "image_gen_command", mode, ref_attachment_id });
+          userMsgId = userMsg.id;
+          if (ref_attachment_id) linkAttachmentsToMessage([ref_attachment_id], userMsgId);
+
+          const asstContent = `🎨 已生成图片\n\n![](/api/uploads/${att.id})\n\n` +
+            `参数: mode=${mode}, weight=${finalWeight}, steps=${steps}, seed=${finalSeed}, ` +
+            `resolution=${resolution}, time=${Math.round((Date.now()-t0)/1000)}s`;
+          const asstMsg = addMessage(conv_id, "assistant", asstContent,
+            { type: "image_gen_result", attachment_id: att.id });
+          asstMsgId = asstMsg.id;
+          linkAttachmentsToMessage([att.id], asstMsgId);
+        } catch (e) {
+          console.warn("[image/generate] 插入消息失败", e.message);
+        }
+      } else {
+        linkAttachmentsToMessage([att.id], null);
+      }
+
+      json(res, {
+        attachment_id: att.id,
+        attachment: att,
+        user_msg_id: userMsgId,
+        asst_msg_id: asstMsgId,
+        seed: finalSeed,
+        mode,
+        weight: finalWeight,
+        duration_ms: Date.now() - t0,
+      });
+    } catch (err) {
+      console.error("[image/generate] error:", err);
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // ── Image generation: cancel current ──
+  if (method === "POST" && path === "/api/image/cancel") {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const convId = body.conv_id;
+      if (!convId) { json(res, { error: "conv_id required" }, 400); return; }
+      const activePromptId = _getActivePromptId(convId);
+      if (!activePromptId) {
+        json(res, { ok: true, msg: "此会话无活跃生图任务" });
+        return;
+      }
+      const comfyUrl = (loadConfig().imagegen || {}).comfyUrl || DEFAULT_COMFY_URL;
+      try {
+        await fetch(`${comfyUrl}/interrupt`, { method: "POST" });
+      } catch (e) {
+        // ComfyUI 挂了也要清本地状态
+      }
+      _markImageGenEnd(convId);
+      json(res, { ok: true, cancelled_prompt_id: activePromptId });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // ── Image generation: health / quota ──
+  if (method === "GET" && path === "/api/image/health") {
+    try {
+      const cfg = loadConfig();
+      const imagegen = cfg.imagegen || {};
+      const comfyUrl = imagegen.comfyUrl || DEFAULT_COMFY_URL;
+      const alive = await comfyPing(comfyUrl, 2000);
+      json(res, {
+        comfy_alive: alive,
+        comfy_url: comfyUrl,
+        limits: {
+          maxConcurrent: imagegen.maxConcurrent ?? 1,
+          maxPerHour: imagegen.maxPerHour ?? 10,
+          maxPerDay: imagegen.maxPerDay ?? 50,
+        },
+        usage: {
+          active_conversations: _imageGenState.activeByConv.size,
+          today_count: _imageGenState.dailyCount,
+        },
+      });
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
     return;
   }
 

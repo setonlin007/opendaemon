@@ -2728,11 +2728,81 @@ function openLightbox(url) {
 }
 
 // ── Chat ──
+// ── /image 斜杠命令处理（直接调 ComfyUI，不走 LLM） ──
+// 语法:
+//   /image <prompt>                   自动模式（有参考图→plus_face，无→txt2img）
+//   /image:MODE <prompt>              显式 mode (plus_face|faceid|faceid_plus|ipadapter|txt2img)
+//   参考图来自当前 pendingAttachments（拖拽或粘贴的图）
+async function handleImageCommand(text, pendingAtts) {
+  if (!currentConvId) return;
+  // 解析 /image 或 /image:MODE
+  const m = text.match(/^\/image(?::(\w+))?\s+(.+)/is);
+  if (!m) return false;  // 不是 /image 命令
+  const explicitMode = m[1];
+  const prompt = m[2].trim();
+  if (!prompt) { toastOrAlert('prompt 不能为空'); return true; }
+
+  const refAtt = pendingAtts.find(a => a.mime_type && a.mime_type.startsWith('image/'));
+  const defaultMode = refAtt ? 'plus_face' : 'txt2img';
+  const mode = explicitMode || defaultMode;
+
+  // 画假的 user bubble 先（让用户看到 "/image ..."）
+  addUserBubble(text, pendingAtts);
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+  clearAttachments();
+
+  // 占位 assistant bubble
+  const bubble = createAssistantBubble();
+  const loading = document.createElement('div');
+  loading.className = 'loading-indicator';
+  loading.innerHTML = `<div class="spinner"></div><span>🎨 ComfyUI 生图中 (${mode})...可能 1-10 分钟</span>`;
+  bubble.appendChild(loading);
+  scrollToBottom();
+
+  try {
+    const res = await fetch('/api/image/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conv_id: currentConvId,
+        prompt,
+        mode,
+        ref_attachment_id: refAtt ? refAtt.id : undefined,
+        create_messages: true,  // 后端负责入库消息
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    // 替换 loading 成实际内容
+    bubble.innerHTML = `<div class="md-content"></div>`;
+    const content = bubble.querySelector('.md-content');
+    const mdText = `🎨 **已生成** (${mode} · ${Math.round(data.duration_ms / 1000)}s · seed ${data.seed})\n\n` +
+      `![](/api/uploads/${data.attachment_id})`;
+    try { content.innerHTML = renderMd(mdText); } catch { content.textContent = mdText; }
+    scrollToBottom();
+  } catch (e) {
+    bubble.innerHTML = `<div style="color:var(--err, #dc3545)">❌ 生图失败: ${e.message}</div>`;
+  }
+  return true;
+}
+
+function toastOrAlert(msg) {
+  try { if (typeof toast === 'function') return toast(msg, 'err'); } catch {}
+  alert(msg);
+}
+
 async function sendMessage() {
   const text = inputEl.value.trim();
   const hasAttachments = pendingAttachments.length > 0;
   if (!text && !hasAttachments) return;
   if (!currentConvId) return;
+
+  // 拦截 /image 命令
+  if (text.startsWith('/image')) {
+    const handled = await handleImageCommand(text, [...pendingAttachments]);
+    if (handled) return;
+  }
   // Auto-recover from stale streaming state:
   // If isStreaming is true but we're on a different conversation, or abortController is gone/aborted,
   // the previous stream is dead — force cleanup and allow sending
