@@ -35,6 +35,14 @@ echo "=== OpenDaemon Deploy ==="
 echo "Conversation: ${CONV_ID:-none}"
 echo "Current commit: $PREV_COMMIT"
 
+# ── Step 0: Ensure clean working tree ──
+# Prior rollbacks (git checkout COMMIT -- .) could stage old-version blobs.
+# Without this reset, git pull moves HEAD but the staged blob wins at checkout,
+# producing a split state: git log shows new code, disk still runs old code.
+# Only tracked-file changes are wiped (node_modules, data/, config.json are gitignored
+# and untouched; package.json auto-upgrades are idempotently re-applied at startup).
+git reset --hard HEAD
+
 # ── Step 1: Pull latest ──
 echo "[1/5] Pulling latest code..."
 git pull origin main 2>&1 || { echo "FAILED: git pull failed"; exit 1; }
@@ -69,7 +77,7 @@ done
 
 if [ $FAIL -eq 1 ]; then
   echo "FAILED: Syntax errors in:$FAIL_FILES"
-  git checkout "$PREV_COMMIT" -- .
+  git reset --hard "$PREV_COMMIT"
   write_msg "assistant" "⚠️ **Deploy failed** — syntax errors in:\`$FAIL_FILES\`. Rolled back to \`$PREV_COMMIT\`."
   echo "Rolled back to $PREV_COMMIT"
   exit 1
@@ -100,7 +108,7 @@ Server is healthy (HTTP $HTTP_CODE)."
   else
     # ── Step 5b: Rollback ──
     cd "$PROJECT_DIR"
-    git checkout "$PREV_COMMIT" -- .
+    git reset --hard "$PREV_COMMIT"
     pm2 restart opendaemon --update-env 2>/dev/null
     write_msg "assistant" "❌ **Deploy failed** — health check returned HTTP $HTTP_CODE. Auto-rolled back to \`$PREV_COMMIT\`."
     echo "[5/5] Deploy FAILED, rolled back" >> /tmp/opendaemon-deploy.log
