@@ -89,10 +89,17 @@ echo "[3/5] Scheduling restart in 5 seconds..."
 (
   sleep 5
   pm2 restart opendaemon --update-env 2>/dev/null
-  sleep 5
 
-  # ── Step 4: Health check ──
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" 2>/dev/null || echo "000")
+  # ── Step 4: Health check with retry ──
+  # Cold start takes 8-12s (MCP init + SDK check + OAuth + FTS rebuild).
+  # A single sleep+check misfires; retry every 2s for up to ~23s instead.
+  sleep 3
+  HTTP_CODE="000"
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$HEALTH_URL" 2>/dev/null || echo "000")
+    case "$HTTP_CODE" in 200|302|401) break ;; esac
+    sleep 2
+  done
 
   if [ "$HTTP_CODE" = "302" ] || [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "401" ]; then
     # ── Step 5a: Success ──
