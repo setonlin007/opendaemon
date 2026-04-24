@@ -2024,6 +2024,7 @@ return He}()
       <div class="about-nav-item" onclick="switchAboutTab('changelog',this)" data-i18n="aboutChangelog">版本历史</div>
       <div style="flex:1"></div>
       <div class="about-nav-item" onclick="switchAboutTab('engines',this)" data-i18n="engines" style="color:var(--text-2);">⚙️ Engines</div>
+      <div class="about-nav-item" onclick="switchAboutTab('imagegen',this)" style="color:var(--text-2);">🎨 Imagegen</div>
       <div class="about-nav-item" onclick="switchAboutTab('social',this)" style="color:var(--text-2);">🔌 Channels</div>
       <div class="about-nav-item" onclick="switchAboutTab('access',this)" data-i18n="accessLink" style="color:var(--text-2);">🔗 Access</div>
     </div>
@@ -2110,6 +2111,7 @@ let streamingConvId = null; // track which conversation is streaming
 let streamingGeneration = 0; // generation counter to prevent race conditions
 let abortController = null;
 let allCommands = [];
+let imagegenProviders = { default: null, providers: [] };  // 缓存 /api/image/providers
 let wasBackgrounded = false;
 const unreadConvs = new Set();
 let pendingAttachments = []; // [{id, filename, mime_type, size_bytes, category, url}]
@@ -2144,6 +2146,7 @@ async function init() {
     ).join('');
     renderConversations();
     loadCommands();
+    loadImagegenProviders();
     if (conversations.length > 0 && !currentConvId) {
       currentConvId = conversations[0].id;
       const conv = conversations[0];
@@ -2744,28 +2747,29 @@ function openLightbox(url) {
 //   参考图来自当前 pendingAttachments（拖拽或粘贴的图）
 async function handleImageCommand(text, pendingAtts) {
   if (!currentConvId) return;
-  // 解析 /image 或 /image:MODE  (容忍多个前导 /: //image, ///image 等 typo)
-  const m = text.match(/^\/+image(?::(\w+))?\s+(.+)/is);
-  if (!m) return false;  // 不是 /image 命令
-  const explicitMode = m[1];
-  const prompt = m[2].trim();
+  // 解析 /image[@provider][:MODE] <prompt>   (容忍多个前导 /: //image 等 typo)
+  const m = text.match(/^\/+image(?:@(\S+))?(?::(\w+))?\s+(.+)/is);
+  if (!m) return false;
+  const explicitProvider = m[1];
+  const explicitMode = m[2];
+  const prompt = m[3].trim();
   if (!prompt) { toastOrAlert('prompt 不能为空'); return true; }
 
   const refAtt = pendingAtts.find(a => a.mime_type && a.mime_type.startsWith('image/'));
   const defaultMode = refAtt ? 'plus_face' : 'txt2img';
   const mode = explicitMode || defaultMode;
+  const providerTag = explicitProvider ? `@${explicitProvider} · ` : '';
 
-  // 画假的 user bubble 先（让用户看到 "/image ..."）
+  // 画假的 user bubble 先
   addUserBubble(text, pendingAtts);
   inputEl.value = '';
   inputEl.style.height = 'auto';
   clearAttachments();
 
-  // 占位 assistant bubble
   const bubble = createAssistantBubble();
   const loading = document.createElement('div');
   loading.className = 'loading-indicator';
-  loading.innerHTML = `<div class="spinner"></div><span>🎨 ComfyUI 生图中 (${mode})...可能 1-10 分钟</span>`;
+  loading.innerHTML = `<div class="spinner"></div><span>🎨 ${providerTag}生图中 (${mode})...可能 1-10 分钟</span>`;
   bubble.appendChild(loading);
   scrollToBottom();
 
@@ -2777,16 +2781,16 @@ async function handleImageCommand(text, pendingAtts) {
         conv_id: currentConvId,
         prompt,
         mode,
+        provider: explicitProvider,            // undefined → server 用 default
         ref_attachment_id: refAtt ? refAtt.id : undefined,
-        create_messages: true,  // 后端负责入库消息
+        create_messages: true,
       }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    // 替换 loading 成实际内容
     bubble.innerHTML = `<div class="md-content"></div>`;
     const content = bubble.querySelector('.md-content');
-    const mdText = `🎨 **已生成** (${mode} · ${Math.round(data.duration_ms / 1000)}s · seed ${data.seed})\n\n` +
+    const mdText = `🎨 **已生成** (${providerTag}${mode} · ${Math.round(data.duration_ms / 1000)}s · seed ${data.seed})\n\n` +
       `![](/api/uploads/${data.attachment_id})`;
     try { content.innerHTML = renderMd(mdText); } catch { content.textContent = mdText; }
     scrollToBottom();
@@ -2808,7 +2812,7 @@ async function sendMessage() {
   if (!currentConvId) return;
 
   // 拦截 /image 命令
-  if (/^\/+image(\s|:|$)/.test(text)) {
+  if (/^\/+image(\s|@|:|$)/.test(text)) {
     const handled = await handleImageCommand(text, [...pendingAttachments]);
     if (handled) return;
   }
@@ -3342,6 +3346,12 @@ async function loadCommands() {
     allCommands = (data.commands || []).map(c => ({ name: '/' + c.name, desc: (c.description || '').split('\n')[0].substring(0, 80) }));
   } catch {}
 }
+async function loadImagegenProviders() {
+  try {
+    const r = await fetch('/api/image/providers');
+    if (r.ok) imagegenProviders = await r.json();
+  } catch {}
+}
 function handleInput() {
   const val = inputEl.value;
   if (val.startsWith('/') && !val.includes('\n') && currentEngine?.type === 'claude-sdk') {
@@ -3672,6 +3682,10 @@ function switchAboutTab(tab, el) {
     body.innerHTML = '<div id="engBodyInline" style="padding:0"><div style="text-align:center;padding:20px;color:var(--text-3)">Loading...</div></div>';
     renderEnginesInline();
   }
+  else if (tab === 'imagegen') {
+    body.innerHTML = '<div id="imagegenBodyInline" style="padding:0"><div style="text-align:center;padding:20px;color:var(--text-3)">Loading...</div></div>';
+    renderImagegenInline();
+  }
   else if (tab === 'social') {
     body.innerHTML = '<div id="socialBodyInline" style="padding:0"><div style="text-align:center;padding:20px;color:var(--text-3)">Loading...</div></div>';
     renderSocialInline();
@@ -3696,6 +3710,55 @@ async function renderEnginesInline() {
     `;
   } catch (err) {
     body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px">Failed to load engines: ${esc(err.message)}</div>`;
+  }
+}
+async function renderImagegenInline() {
+  const body = $('imagegenBodyInline');
+  if (!body) return;
+  try {
+    const r = await fetch('/api/image/providers');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    imagegenProviders = data;  // 刷新缓存
+    const providers = data.providers || [];
+    if (providers.length === 0) {
+      body.innerHTML = `<div style="padding:20px;color:var(--text-3)">
+        尚未配置图像生成 provider。在 <code>config.json</code> 的 <code>imagegen.providers</code> 下添加。
+      </div>`;
+      return;
+    }
+    body.innerHTML = `
+      <div style="padding:16px 20px;">
+        <div style="color:var(--text-3);font-size:12px;margin-bottom:12px;">
+          默认 provider: <code>${esc(data.default || "(none)")}</code> · 使用 <code>/image@&lt;id&gt; &lt;prompt&gt;</code> 指定
+        </div>
+        ${providers.map(p => {
+          const caps = p.capabilities || {};
+          const isDefault = p.id === data.default;
+          return `
+            <div style="border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px;background:var(--bg-2, transparent);">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <strong style="font-size:15px;">${esc(p.id)}</strong>
+                <span style="font-size:11px;color:var(--text-3);padding:2px 8px;border:1px solid var(--border);border-radius:4px;">${esc(p.type)}</span>
+                ${isDefault ? '<span style="font-size:11px;color:#3b82f6;padding:2px 8px;border:1px solid #3b82f6;border-radius:4px;">default</span>' : ''}
+              </div>
+              <div style="font-size:12px;color:var(--text-3);line-height:1.8;">
+                <div>modes: ${(caps.modes || []).map(m => `<code>${esc(m)}</code>`).join(" ")}</div>
+                <div>resolutions: ${(caps.resolutions || []).map(r => `<code>${esc(r)}</code>`).join(" ")}</div>
+                <div>
+                  ref image: ${caps.supportsRefImage ? '✓' : '✗'} ·
+                  negative prompt: ${caps.supportsNegativePrompt ? '✓' : '✗'} ·
+                  cancel: ${caps.supportsCancel ? '✓' : '✗'}
+                  ${caps.estimatedSeconds ? ` · ~${caps.estimatedSeconds}s` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  } catch (err) {
+    body.innerHTML = `<div style="color:var(--text-3);text-align:center;padding:20px">加载失败: ${esc(err.message)}</div>`;
   }
 }
 async function renderSocialInline() {

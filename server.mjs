@@ -21,7 +21,7 @@ import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAt
 import { buildWorkflow, uploadImageToComfy, submitPrompt as comfySubmitPrompt, pollUntilComplete as comfyPollUntilComplete, downloadOutput as comfyDownloadOutput, ping as comfyPing, DEFAULT_COMFY_URL } from "./lib/comfyui.mjs";
 // Imagegen adapters — self-register on import; loadAdapters() initializes registry below.
 import "./lib/image-gen/adapters/comfyui.mjs";
-import { loadAdapters as _loadImagegenAdapters, listProviders as listImagegenProviders } from "./lib/image-gen/index.mjs";
+import { loadAdapters as _loadImagegenAdapters, listProviders as listImagegenProviders, getAdapter as getImagegenAdapter } from "./lib/image-gen/index.mjs";
 import { translateIfChinese } from "./lib/prompt-translator.mjs";
 
 // ── 生图速率限制 & 活跃追踪 ──
@@ -1046,14 +1046,20 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // 读 imagegen 配置（可能为空，使用默认）
+      // 读 imagegen 配置（已由 migrateImagegen 规范化为 { default, providers, limits }）
       const cfg = loadConfig();
       const imagegen = cfg.imagegen || {};
-      const comfyUrl = imagegen.comfyUrl || DEFAULT_COMFY_URL;
+      const useAdapters = imagegen.useAdapters === true;  // T4: feature flag
+      const providerId = body.provider;                   // 可选，传 undefined 走 default
+      // 保留旧路径所需的 comfyUrl（从第一个 comfyui 类型 provider 取，保持向后兼容）
+      const legacyComfyUrl = (() => {
+        const p = (imagegen.providers || []).find(x => x.type === "comfyui");
+        return p?.url || DEFAULT_COMFY_URL;
+      })();
       const limits = {
-        maxConcurrent: imagegen.maxConcurrent ?? 1,
-        maxPerHour: imagegen.maxPerHour ?? 10,
-        maxPerDay: imagegen.maxPerDay ?? 50,
+        maxConcurrent: imagegen.limits?.maxConcurrent ?? 1,
+        maxPerHour: imagegen.limits?.maxPerHour ?? 10,
+        maxPerDay: imagegen.limits?.maxPerDay ?? 50,
       };
 
       // 速率限制
@@ -1081,16 +1087,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // 预检 ComfyUI
-      console.log(`[image/generate] conv=${conv_id} ping comfy=${comfyUrl}`);
-      if (!(await comfyPing(comfyUrl))) {
-        const msg = `ComfyUI 不可达 (${comfyUrl})，请先启动 ComfyUI 或在设置里改 URL`;
-        console.log(`[image/generate] reject conv=${conv_id}: ComfyUI unreachable`);
-        insertFailureMsg(msg);
-        json(res, { error: msg }, 503); return;
-      }
-
-      // 分辨率解析
+      // 分辨率解析（两路径共用）
       const RESOLUTIONS = {
         lite_portrait: { width: 768, height: 1024 },
         lite_square:   { width: 768, height: 768 },
@@ -1100,40 +1097,13 @@ const server = http.createServer(async (req, res) => {
       };
       const resSpec = RESOLUTIONS[resolution] || RESOLUTIONS.lite_portrait;
 
-      // mode weight 默认值
+      // mode weight 默认值（两路径共用）
       const MODE_WEIGHT_DEFAULT = {
         plus_face: 0.85, faceid: 1.1, faceid_plus: 1.0, ipadapter: 0.8, txt2img: 1.0,
       };
       const finalWeight = weight ?? MODE_WEIGHT_DEFAULT[mode] ?? 1.0;
 
-      // 如果有参考图，读取字节并上传到 ComfyUI
-      let refImageName = null;
-      if (ref_attachment_id) {
-        const refAtt = getAttachment(ref_attachment_id);  // 上面已校验存在
-        const refBuf = getAttachmentBuffer(ref_attachment_id);
-        if (!refBuf) {
-          const msg = "ref attachment file missing on disk";
-          console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
-          insertFailureMsg(msg);
-          json(res, { error: msg }, 404); return;
-        }
-        const comfyFn = `od_ref_${ref_attachment_id}.${(refAtt.filename.split('.').pop() || 'png')}`;
-        try {
-          refImageName = await uploadImageToComfy(refBuf, comfyFn, comfyUrl);
-        } catch (e) {
-          const msg = `ComfyUI 上传参考图失败: ${e.message}`;
-          console.log(`[image/generate] conv=${conv_id} ${msg}`);
-          insertFailureMsg(msg);
-          json(res, { error: msg }, 502); return;
-        }
-      } else if (mode !== "txt2img") {
-        const msg = `mode '${mode}' 需要 ref_attachment_id`;
-        console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
-        insertFailureMsg(msg);
-        json(res, { error: msg }, 400); return;
-      }
-
-      // 中文 prompt 自动翻译成英文（用 config 里第一个 openai 引擎，如 kimi-k2）
+      // 中文 prompt 翻译（两路径共用）
       let finalPositive = prompt;
       let finalNegative = negative_prompt;
       let translatedFrom = null;
@@ -1151,60 +1121,208 @@ const server = http.createServer(async (req, res) => {
         console.warn("[image/generate] 翻译失败，用原文:", e.message);
       }
 
-      // 构造工作流
-      const { workflow, seed: finalSeed } = buildWorkflow(mode, {
-        refImage: refImageName,
-        positive: finalPositive,
-        negative: finalNegative,
-        width: resSpec.width,
-        height: resSpec.height,
-        steps,
-        seed,
-        weight: finalWeight,
-        useLightning: use_lightning,
-      });
-
-      // 提交 + 轮询（同步等完成）
+      // 分支执行：两路径各自生成图片字节，统一提交给下面的落库逻辑
       const t0 = Date.now();
-      let promptId, output;
-      try {
-        promptId = await comfySubmitPrompt(workflow, comfyUrl);
-        console.log(`[image/generate] conv=${conv_id} submitted promptId=${promptId}`);
-        _markImageGenStart(conv_id, promptId);
+      let pngBuf;
+      let finalSeed = seed;
+      let providerJobId = null;
+      let actualProviderId = "default-comfyui";    // 默认值；新路径下会被 adapter.id 覆盖
+      let outputFilename = null;
+      let adapterMetadata = {};
+
+      if (useAdapters) {
+        // ─── T4 新路径：统一通过 ImageGenAdapter ───
+        let adapter;
         try {
-          output = await comfyPollUntilComplete(promptId, comfyUrl, 1800000 /* 30 min */);
-          console.log(`[image/generate] conv=${conv_id} poll done promptId=${promptId} genDur=${Date.now()-t0}ms`);
+          adapter = getImagegenAdapter(providerId);
+        } catch (e) {
+          console.log(`[image/generate] reject conv=${conv_id}: ${e.message}`);
+          insertFailureMsg(e.message);
+          json(res, { error: e.message }, 400); return;
+        }
+        actualProviderId = adapter.id;
+        const caps = adapter.capabilities;
+
+        // 能力校验
+        if (mode && !caps.modes.includes(mode)) {
+          const msg = `provider '${adapter.id}' 不支持 mode '${mode}'`;
+          console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 400); return;
+        }
+        if (ref_attachment_id && !caps.supportsRefImage) {
+          const msg = `provider '${adapter.id}' 不支持参考图`;
+          console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 400); return;
+        }
+        if (!ref_attachment_id && mode !== "txt2img") {
+          const msg = `mode '${mode}' 需要 ref_attachment_id`;
+          console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 400); return;
+        }
+
+        // Ping
+        if (typeof adapter.ping === "function") {
+          console.log(`[image/generate] conv=${conv_id} ping provider=${adapter.id}`);
+          if (!(await adapter.ping())) {
+            const msg = `provider '${adapter.id}' 不可达`;
+            console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+            insertFailureMsg(msg);
+            json(res, { error: msg }, 503); return;
+          }
+        }
+
+        // 读 ref image bytes（如果有）
+        let refBuf = null, refFilename = null;
+        if (ref_attachment_id) {
+          refBuf = getAttachmentBuffer(ref_attachment_id);
+          if (!refBuf) {
+            const msg = "ref attachment file missing on disk";
+            console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+            insertFailureMsg(msg);
+            json(res, { error: msg }, 404); return;
+          }
+          refFilename = getAttachment(ref_attachment_id).filename;
+        }
+
+        // 生成（业务层只负责并发锁，细节在 adapter 内）
+        _markImageGenStart(conv_id, "pending");
+        let result;
+        try {
+          result = await adapter.generate({
+            prompt: finalPositive,
+            negative_prompt: finalNegative,
+            mode,
+            ref_image: refBuf,
+            ref_image_name: refFilename,
+            width: resSpec.width,
+            height: resSpec.height,
+            steps,
+            seed,
+            weight: finalWeight,
+            use_lightning,
+          });
+          console.log(`[image/generate] conv=${conv_id} provider=${adapter.id} done genDur=${result.duration_ms}ms`);
+        } catch (e) {
+          _markImageGenEnd(conv_id);
+          const msg = `provider '${adapter.id}' 生成失败: ${e.message}`;
+          console.log(`[image/generate] conv=${conv_id} ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 502); return;
         } finally {
           _markImageGenEnd(conv_id);
         }
-      } catch (e) {
-        _markImageGenEnd(conv_id);  // 出错也要释放并发锁
-        const msg = `ComfyUI 执行失败: ${e.message}`;
-        console.log(`[image/generate] conv=${conv_id} ${msg}`);
-        insertFailureMsg(msg);
-        json(res, { error: msg }, 502); return;
+
+        pngBuf = result.image;
+        finalSeed = result.metadata?.seed ?? seed;
+        providerJobId = result.provider_job_id || null;
+        adapterMetadata = result.metadata || {};
+        outputFilename = result.metadata?.comfy_output_filename
+          || `${adapter.id}_${Date.now()}.${result.format === "jpeg" ? "jpg" : "png"}`;
+      } else {
+        // ─── 旧路径：保留直连 ComfyUI 的原始代码（行为不变）───
+        const comfyUrl = legacyComfyUrl;
+
+        // 预检 ComfyUI
+        console.log(`[image/generate] conv=${conv_id} ping comfy=${comfyUrl}`);
+        if (!(await comfyPing(comfyUrl))) {
+          const msg = `ComfyUI 不可达 (${comfyUrl})，请先启动 ComfyUI 或在设置里改 URL`;
+          console.log(`[image/generate] reject conv=${conv_id}: ComfyUI unreachable`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 503); return;
+        }
+
+        // 如果有参考图，读取字节并上传到 ComfyUI
+        let refImageName = null;
+        if (ref_attachment_id) {
+          const refAtt = getAttachment(ref_attachment_id);
+          const refBuf = getAttachmentBuffer(ref_attachment_id);
+          if (!refBuf) {
+            const msg = "ref attachment file missing on disk";
+            console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+            insertFailureMsg(msg);
+            json(res, { error: msg }, 404); return;
+          }
+          const comfyFn = `od_ref_${ref_attachment_id}.${(refAtt.filename.split('.').pop() || 'png')}`;
+          try {
+            refImageName = await uploadImageToComfy(refBuf, comfyFn, comfyUrl);
+          } catch (e) {
+            const msg = `ComfyUI 上传参考图失败: ${e.message}`;
+            console.log(`[image/generate] conv=${conv_id} ${msg}`);
+            insertFailureMsg(msg);
+            json(res, { error: msg }, 502); return;
+          }
+        } else if (mode !== "txt2img") {
+          const msg = `mode '${mode}' 需要 ref_attachment_id`;
+          console.log(`[image/generate] reject conv=${conv_id}: ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 400); return;
+        }
+
+        // 构造工作流
+        const { workflow, seed: builtSeed } = buildWorkflow(mode, {
+          refImage: refImageName,
+          positive: finalPositive,
+          negative: finalNegative,
+          width: resSpec.width,
+          height: resSpec.height,
+          steps,
+          seed,
+          weight: finalWeight,
+          useLightning: use_lightning,
+        });
+        finalSeed = builtSeed;
+
+        // 提交 + 轮询
+        let promptId, output;
+        try {
+          promptId = await comfySubmitPrompt(workflow, comfyUrl);
+          console.log(`[image/generate] conv=${conv_id} submitted promptId=${promptId}`);
+          _markImageGenStart(conv_id, promptId);
+          try {
+            output = await comfyPollUntilComplete(promptId, comfyUrl, 1800000);
+            console.log(`[image/generate] conv=${conv_id} poll done promptId=${promptId} genDur=${Date.now()-t0}ms`);
+          } finally {
+            _markImageGenEnd(conv_id);
+          }
+        } catch (e) {
+          _markImageGenEnd(conv_id);
+          const msg = `ComfyUI 执行失败: ${e.message}`;
+          console.log(`[image/generate] conv=${conv_id} ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 502); return;
+        }
+
+        // 下载
+        console.log(`[image/generate] conv=${conv_id} downloading output filename=${output.filename}`);
+        try {
+          pngBuf = await comfyDownloadOutput(output.filename, output.subfolder, comfyUrl);
+          console.log(`[image/generate] conv=${conv_id} downloaded ${pngBuf.length} bytes`);
+        } catch (e) {
+          const msg = `下载生成图失败: ${e.message}`;
+          console.log(`[image/generate] conv=${conv_id} ${msg}`);
+          insertFailureMsg(msg);
+          json(res, { error: msg }, 502); return;
+        }
+        providerJobId = promptId;
+        outputFilename = output.filename;
       }
 
-      // 下载结果 + 存为 attachment
-      console.log(`[image/generate] conv=${conv_id} downloading output filename=${output.filename}`);
-      let pngBuf;
-      try {
-        pngBuf = await comfyDownloadOutput(output.filename, output.subfolder, comfyUrl);
-        console.log(`[image/generate] conv=${conv_id} downloaded ${pngBuf.length} bytes`);
-      } catch (e) {
-        const msg = `下载生成图失败: ${e.message}`;
-        console.log(`[image/generate] conv=${conv_id} ${msg}`);
-        insertFailureMsg(msg);
-        json(res, { error: msg }, 502); return;
-      }
-      const att = saveAttachment(conv_id, output.filename, "image/png", pngBuf);
+      // ─── 共用：存附件 + metadata + assistant 消息 + 响应 ───
+      const att = saveAttachment(conv_id, outputFilename, "image/png", pngBuf);
       const metaJson = JSON.stringify({
         prompt: finalPositive,
         prompt_original: translatedFrom || undefined,
         negative_prompt: finalNegative,
         mode, ref_attachment_id: ref_attachment_id || null,
         weight: finalWeight, steps, seed: finalSeed, resolution, use_lightning,
-        comfy_prompt_id: promptId, generated_at: t0,
+        provider: actualProviderId,
+        provider_job_id: providerJobId,
+        comfy_prompt_id: providerJobId,  // 向后兼容旧字段名
+        ...adapterMetadata,
+        generated_at: t0,
       });
       try {
         updateAttachmentMetadata(att.id, metaJson);
@@ -1216,8 +1334,9 @@ const server = http.createServer(async (req, res) => {
       let asstMsgId = null;
       if (create_messages) {
         try {
+          const providerTag = useAdapters ? `provider=${actualProviderId}, ` : "";
           const asstContent = `🎨 已生成图片\n\n![](/api/uploads/${att.id})\n\n` +
-            `参数: mode=${mode}, weight=${finalWeight}, steps=${steps}, seed=${finalSeed}, ` +
+            `参数: ${providerTag}mode=${mode}, weight=${finalWeight}, steps=${steps}, seed=${finalSeed}, ` +
             `resolution=${resolution}, time=${Math.round((Date.now()-t0)/1000)}s`;
           const asstMsg = addMessage(conv_id, "assistant", asstContent,
             { type: "image_gen_result", attachment_id: att.id });
@@ -1230,7 +1349,7 @@ const server = http.createServer(async (req, res) => {
         linkAttachmentsToMessage([att.id], null);
       }
 
-      console.log(`[image/generate] done conv=${conv_id} att=${att.id} promptId=${promptId} total=${Date.now()-tReq}ms`);
+      console.log(`[image/generate] done conv=${conv_id} att=${att.id} provider=${actualProviderId} jobId=${providerJobId} total=${Date.now()-tReq}ms`);
       json(res, {
         attachment_id: att.id,
         attachment: att,
@@ -1280,20 +1399,31 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Image generation: providers list (T5) ──
+  if (method === "GET" && path === "/api/image/providers") {
+    try {
+      json(res, listImagegenProviders());
+    } catch (err) {
+      json(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
   // ── Image generation: health / quota ──
   if (method === "GET" && path === "/api/image/health") {
     try {
       const cfg = loadConfig();
       const imagegen = cfg.imagegen || {};
-      const comfyUrl = imagegen.comfyUrl || DEFAULT_COMFY_URL;
+      const firstComfy = (imagegen.providers || []).find(p => p.type === "comfyui");
+      const comfyUrl = firstComfy?.url || DEFAULT_COMFY_URL;
       const alive = await comfyPing(comfyUrl, 2000);
       json(res, {
         comfy_alive: alive,
         comfy_url: comfyUrl,
         limits: {
-          maxConcurrent: imagegen.maxConcurrent ?? 1,
-          maxPerHour: imagegen.maxPerHour ?? 10,
-          maxPerDay: imagegen.maxPerDay ?? 50,
+          maxConcurrent: imagegen.limits?.maxConcurrent ?? 1,
+          maxPerHour: imagegen.limits?.maxPerHour ?? 10,
+          maxPerDay: imagegen.limits?.maxPerDay ?? 50,
         },
         usage: {
           active_conversations: _imageGenState.activeByConv.size,
