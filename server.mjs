@@ -1072,7 +1072,7 @@ const server = http.createServer(async (req, res) => {
 
       // 预检 ComfyUI
       console.log(`[image/generate] conv=${conv_id} ping comfy=${comfyUrl}`);
-      if (!(await comfyPing(comfyUrl, 3000))) {
+      if (!(await comfyPing(comfyUrl))) {
         const msg = `ComfyUI 不可达 (${comfyUrl})，请先启动 ComfyUI 或在设置里改 URL`;
         console.log(`[image/generate] reject conv=${conv_id}: ComfyUI unreachable`);
         insertFailureMsg(msg);
