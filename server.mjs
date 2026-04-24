@@ -19,6 +19,9 @@ import { loadPlugins } from "./lib/plugin-loader.mjs";
 import { addTrace, updateTraceFeedback, getTraces, getTraceStats } from "./lib/trace.mjs";
 import { initUploads, saveAttachment, getAttachment, getAttachmentBuffer, linkAttachmentsToMessage, deleteAttachmentFiles, getAttachmentsForMessages, buildClaudeContent, buildOpenAIContent, MAX_FILES_PER_REQUEST, updateAttachmentMetadata } from "./lib/attachments.mjs";
 import { buildWorkflow, uploadImageToComfy, submitPrompt as comfySubmitPrompt, pollUntilComplete as comfyPollUntilComplete, downloadOutput as comfyDownloadOutput, ping as comfyPing, DEFAULT_COMFY_URL } from "./lib/comfyui.mjs";
+// Imagegen adapters — self-register on import; loadAdapters() initializes registry below.
+import "./lib/image-gen/adapters/comfyui.mjs";
+import { loadAdapters as _loadImagegenAdapters, listProviders as listImagegenProviders } from "./lib/image-gen/index.mjs";
 import { translateIfChinese } from "./lib/prompt-translator.mjs";
 
 // ── 生图速率限制 & 活跃追踪 ──
@@ -222,6 +225,14 @@ const serverDeps = {
 };
 
 console.log(`[init] ${config.engines.length} engines configured, listening on ${HOST}:${PORT}`);
+
+// ── Initialize imagegen adapter registry ──
+try {
+  const r = _loadImagegenAdapters(config.imagegen);
+  console.log(`[init] imagegen: ${r.count} adapter(s) loaded, default=${r.defaultId || "none"}`);
+} catch (e) {
+  console.error(`[init] imagegen registry failed:`, e.message);
+}
 
 // ── Helpers ──
 
