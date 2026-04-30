@@ -1913,11 +1913,17 @@ return He}()
   </div>
   <div class="conv-list" id="convList"></div>
   <div class="sidebar-footer">
-    <button class="footer-btn" onclick="openArtifactsPanel()">
+    <button class="footer-btn" onclick="openArtifactsPanel('artifacts')">
       <span class="footer-icon">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       </span>
       <span class="footer-label" data-i18n="files">Files</span>
+    </button>
+    <button class="footer-btn" onclick="openArtifactsPanel('workspace')">
+      <span class="footer-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 7h18M3 12h18M3 17h18"/><path d="M3 4h18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/></svg>
+      </span>
+      <span class="footer-label">Workspace</span>
     </button>
     <button class="footer-btn" onclick="openEvolutionPanel()">
       <span class="footer-icon">
@@ -2045,7 +2051,7 @@ return He}()
 <div class="artifacts-overlay" id="artifactsOverlay" onclick="if(event.target===this)closeArtifactsPanel()">
   <div class="artifacts-panel">
     <div class="artifacts-header">
-      <h2>📁 Artifacts</h2>
+      <h2 id="artifactsTitle">📁 Artifacts</h2>
       <button class="evo-close" onclick="closeArtifactsPanel()">&times;</button>
     </div>
     <div class="artifacts-tree" id="artifactsTree"></div>
@@ -3510,7 +3516,10 @@ function startHealthCheck() {
 startHealthCheck();
 
 // ── Artifacts Browser ──
-function openArtifactsPanel() {
+let currentArtifactsRoot = 'artifacts'; // 'artifacts' or 'workspace'
+function openArtifactsPanel(root = 'artifacts') {
+  currentArtifactsRoot = root;
+  $('artifactsTitle').textContent = root === 'workspace' ? '📁 Workspace' : '📁 Artifacts';
   $('artifactsOverlay').classList.add('open');
   loadArtifactsDir('', $('artifactsTree'));
 }
@@ -3542,7 +3551,10 @@ function fmtDate(ms) {
 
 async function loadArtifactsDir(dirPath, container) {
   try {
-    const url = dirPath ? `/api/workspace/tree?path=${encodeURIComponent(dirPath)}` : '/api/workspace/tree';
+    const rootQ = currentArtifactsRoot === 'workspace' ? 'root=workspace' : '';
+    const pathQ = dirPath ? `path=${encodeURIComponent(dirPath)}` : '';
+    const qs = [rootQ, pathQ].filter(Boolean).join('&');
+    const url = qs ? `/api/workspace/tree?${qs}` : '/api/workspace/tree';
     const data = await api('GET', url);
     if (!data.items || data.items.length === 0) {
       container.innerHTML = '<div style="padding:20px;color:var(--text-3);text-align:center;font-size:13px;">暂无文件</div>';
@@ -3565,7 +3577,8 @@ async function loadArtifactsDir(dirPath, container) {
       } else {
         const previewable = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(item.name);
         const textPreview = /\.(txt|md|csv|json|xml|log)$/i.test(item.name);
-        const downloadUrl = '/api/workspace/files/' + encodeURIComponent(fullPath);
+        const rootSuffix = currentArtifactsRoot === 'workspace' ? '?root=workspace' : '';
+        const downloadUrl = '/api/workspace/files/' + encodeURIComponent(fullPath) + rootSuffix;
         html += `<div class="art-item art-file">
           <div class="art-row">
             <span class="art-icon">${icon}</span>

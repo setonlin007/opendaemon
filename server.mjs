@@ -1493,18 +1493,23 @@ const server = http.createServer(async (req, res) => {
 
   // ── Workspace: artifacts directory tree ──
 
+  const WORKSPACE_ROOT = join(homedir(), "workspace");
   const WORKSPACE_ARTIFACTS = join(homedir(), "workspace", "artifacts");
+  // Resolve which workspace root to expose, based on ?root= query
+  const resolveWsRoot = (params) =>
+    params.get("root") === "workspace" ? WORKSPACE_ROOT : WORKSPACE_ARTIFACTS;
 
   if (method === "GET" && path === "/api/workspace/tree") {
     try {
       const qIdx = req.url.indexOf("?");
       const params = qIdx >= 0 ? new URLSearchParams(req.url.substring(qIdx)) : new URLSearchParams();
+      const baseDir_ = resolveWsRoot(params);
       const relPath = params.get("path") || "";
       if (relPath.includes("..") || relPath.startsWith("/")) {
         res.writeHead(403); res.end("Forbidden"); return;
       }
-      const absDir = join(WORKSPACE_ARTIFACTS, relPath);
-      if (!absDir.startsWith(WORKSPACE_ARTIFACTS)) {
+      const absDir = join(baseDir_, relPath);
+      if (!absDir.startsWith(baseDir_)) {
         res.writeHead(403); res.end("Forbidden"); return;
       }
       if (!existsSync(absDir) || !statSync(absDir).isDirectory()) {
@@ -1541,12 +1546,15 @@ const server = http.createServer(async (req, res) => {
 
   if (method === "GET" && path.startsWith("/api/workspace/files/")) {
     try {
+      const qIdx = req.url.indexOf("?");
+      const params = qIdx >= 0 ? new URLSearchParams(req.url.substring(qIdx)) : new URLSearchParams();
+      const baseDir_ = resolveWsRoot(params);
       const relativePath = decodeURIComponent(path.substring("/api/workspace/files/".length));
       if (relativePath.includes("..") || relativePath.startsWith("/")) {
         res.writeHead(403); res.end("Forbidden"); return;
       }
-      const filePath = join(WORKSPACE_ARTIFACTS, relativePath);
-      if (!filePath.startsWith(WORKSPACE_ARTIFACTS)) {
+      const filePath = join(baseDir_, relativePath);
+      if (!filePath.startsWith(baseDir_)) {
         res.writeHead(403); res.end("Forbidden"); return;
       }
       if (!existsSync(filePath) || !statSync(filePath).isFile()) {
