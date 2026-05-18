@@ -88,6 +88,26 @@ fi
 
 NODE_VERSION=$(node -v)
 NPM_VERSION=$(npm -v)
+
+# Node 版本检查 (需要 ≥ 18)
+NODE_MAJOR=$(echo "$NODE_VERSION" | sed -E 's/v([0-9]+)\..*/\1/')
+if [[ "$NODE_MAJOR" -lt 18 ]]; then
+  echo -e "${YELLOW}! Node.js $NODE_VERSION 版本太老 (Claude Code 需要 ≥ 18)${RESET}"
+  read -p "$(echo -e ${CYAN}要自动下载新版 Node.js 覆盖安装吗？\(y/n\):${RESET}\ )" UPGRADE_NODE
+  if [[ "$UPGRADE_NODE" == "y" || "$UPGRADE_NODE" == "Y" ]]; then
+    TMP_PKG="/tmp/node-installer-$$.pkg"
+    trap "rm -f $TMP_PKG" EXIT
+    curl -fL --progress-bar -o "$TMP_PKG" "$NODE_PKG_URL"
+    sudo installer -pkg "$TMP_PKG" -target /
+    export PATH="/usr/local/bin:$PATH"
+    NODE_VERSION=$(node -v)
+    NPM_VERSION=$(npm -v)
+  else
+    echo -e "${RED}请手动升级 Node.js 到 18+，再重新双击本脚本${RESET}"
+    read -p "$(echo -e ${DIM}按回车退出${RESET}\ )" _
+    exit 1
+  fi
+fi
 echo -e "${GREEN}✓${RESET} Node.js ${BOLD}$NODE_VERSION${RESET}  ·  npm ${BOLD}$NPM_VERSION${RESET}"
 
 # ──── Step 2 · 配置 npm 国内镜像 ────
@@ -95,8 +115,14 @@ echo ""
 echo -e "${BOLD}[2/5] 配置淘宝 npm 镜像${RESET}"
 CURRENT_REGISTRY=$(npm config get registry)
 if [[ "$CURRENT_REGISTRY" != *"npmmirror"* ]]; then
-  npm config set registry https://registry.npmmirror.com
-  echo -e "${GREEN}✓${RESET} 已切到 ${ORANGE}registry.npmmirror.com${RESET}"
+  echo -e "${DIM}当前 registry: ${CURRENT_REGISTRY}${RESET}"
+  read -p "$(echo -e ${CYAN}切到淘宝镜像吗？\(y/n，默认 y\):${RESET}\ )" SWITCH_REG
+  if [[ -z "$SWITCH_REG" || "$SWITCH_REG" == "y" || "$SWITCH_REG" == "Y" ]]; then
+    npm config set registry https://registry.npmmirror.com
+    echo -e "${GREEN}✓${RESET} 已切到 ${ORANGE}registry.npmmirror.com${RESET}"
+  else
+    echo -e "${YELLOW}保留你原来的 ${CURRENT_REGISTRY}（如果装得慢就再跑一次本脚本切换）${RESET}"
+  fi
 else
   echo -e "${GREEN}✓${RESET} 已经是国内镜像"
 fi
@@ -207,13 +233,70 @@ CONFIG_DIR="$HOME/.claude-code-router"
 CONFIG_PATH="$CONFIG_DIR/config.json"
 mkdir -p "$CONFIG_DIR"
 
-# 如果已存在 config，备份
+# 配置文件已存在 → 给三个选择
 if [[ -f "$CONFIG_PATH" ]]; then
-  cp "$CONFIG_PATH" "$CONFIG_PATH.backup.$(date +%s)"
-  echo -e "${DIM}// 已备份旧配置为 config.json.backup.${RESET}"
+  echo ""
+  echo -e "${YELLOW}! 已检测到旧的 config.json:${RESET}"
+  echo -e "${DIM}   $CONFIG_PATH${RESET}"
+  echo ""
+  echo -e "  ${ORANGE}1${RESET}  覆盖   ${DIM}用新选的 $PROVIDER_LABEL 替换全部（旧的会备份）${RESET}"
+  echo -e "  ${ORANGE}2${RESET}  追加   ${DIM}把 $PROVIDER_LABEL 加到 Providers 数组里（保留其它）${RESET}"
+  echo -e "  ${ORANGE}3${RESET}  跳过   ${DIM}不动 config，安装到此结束${RESET}"
+  echo ""
+  while true; do
+    read -p "$(echo -e ${CYAN}选 1-3：${RESET}\ )" CONFIG_CHOICE
+    case $CONFIG_CHOICE in
+      1|2|3) break ;;
+      *) echo -e "${YELLOW}请输入 1、2 或 3${RESET}" ;;
+    esac
+  done
+
+  if [[ "$CONFIG_CHOICE" == "3" ]]; then
+    echo -e "${DIM}// 跳过配置写入${RESET}"
+    SKIP_WRITE=1
+  else
+    # 备份
+    cp "$CONFIG_PATH" "$CONFIG_PATH.backup.$(date +%s)"
+    echo -e "${DIM}// 已备份旧配置为 config.json.backup.$(date +%s)${RESET}"
+
+    if [[ "$CONFIG_CHOICE" == "2" ]]; then
+      # 追加模式：用 python 解析旧 json，加入新 provider
+      python3 - "$CONFIG_PATH" "$PROVIDER_NAME" "$BASE_URL" "$API_KEY" "$MODELS" "$DEFAULT_MODEL" "$TRANSFORMER" <<'PYEOF'
+import json, sys
+path, name, base, key, models, default_model, transformer_raw = sys.argv[1:8]
+with open(path) as f:
+    cfg = json.load(f)
+cfg.setdefault("Providers", [])
+# 去重：如果已有同名 provider，覆盖它
+cfg["Providers"] = [p for p in cfg["Providers"] if p.get("name") != name]
+provider = {
+    "name": name,
+    "api_base_url": base,
+    "api_key": key,
+    "models": json.loads(models),
+}
+tf = json.loads("{" + transformer_raw.replace('"transformer":', '') + "}").get("transformer") if transformer_raw else None
+# transformer_raw 格式是 '"transformer":{...}'，提出 {...} 部分
+import re
+m = re.search(r'"transformer"\s*:\s*(\{.*\})', transformer_raw)
+if m:
+    provider["transformer"] = json.loads(m.group(1))
+cfg["Providers"].append(provider)
+cfg.setdefault("Router", {})
+# 把 default 路由切到新加的 provider
+cfg["Router"]["default"] = f"{name},{default_model}"
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2, ensure_ascii=False)
+print(f"✓ 已追加 {name} 到 Providers (default 路由也切换了)")
+PYEOF
+      SKIP_WRITE=1
+    fi
+  fi
 fi
 
-cat > "$CONFIG_PATH" <<EOF
+# 覆盖模式 或 全新写入
+if [[ -z "$SKIP_WRITE" ]]; then
+  cat > "$CONFIG_PATH" <<EOF
 {
   "LOG": false,
   "Providers": [
@@ -233,7 +316,8 @@ cat > "$CONFIG_PATH" <<EOF
   }
 }
 EOF
-echo -e "${GREEN}✓${RESET} 配置已写入 ${DIM}$CONFIG_PATH${RESET}"
+  echo -e "${GREEN}✓${RESET} 配置已写入 ${DIM}$CONFIG_PATH${RESET}"
+fi
 
 # ──── 完成 ────
 echo ""

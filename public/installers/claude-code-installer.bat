@@ -86,6 +86,31 @@ if %errorlevel% neq 0 (
 
 for /f "delims=" %%v in ('node -v') do set NODE_VERSION=%%v
 for /f "delims=" %%v in ('npm -v') do set NPM_VERSION=%%v
+
+REM Node 版本检查 (>= 18)
+for /f "tokens=1 delims=." %%a in ("!NODE_VERSION:v=!") do set NODE_MAJOR=%%a
+if !NODE_MAJOR! lss 18 (
+  echo !  Node.js !NODE_VERSION! 太老 ^(Claude Code 需要 ^>= 18^)
+  set /p UPGRADE_NODE="要自动下载安装新版覆盖吗？(y/n) "
+  if /i "!UPGRADE_NODE!"=="y" (
+    if /I "%PROCESSOR_ARCHITECTURE%"=="ARM64" (
+      set NODE_MSI_FILE=node-!NODE_VER!-arm64.msi
+    ) else (
+      set NODE_MSI_FILE=node-!NODE_VER!-x64.msi
+    )
+    set NODE_MSI_URL=https://cdn.npmmirror.com/binaries/node/!NODE_VER!/!NODE_MSI_FILE!
+    set NODE_MSI_PATH=%TEMP%\!NODE_MSI_FILE!
+    powershell -NoProfile -Command "$ProgressPreference='Continue'; Invoke-WebRequest -Uri '!NODE_MSI_URL!' -OutFile '!NODE_MSI_PATH!' -UseBasicParsing"
+    powershell -NoProfile -Command "$p = Start-Process msiexec.exe -ArgumentList '/i','!NODE_MSI_PATH!','/quiet','/norestart','ADDLOCAL=ALL' -Verb RunAs -PassThru -Wait; exit $p.ExitCode"
+    set "PATH=%PATH%;%ProgramFiles%\nodejs"
+    for /f "delims=" %%v in ('node -v') do set NODE_VERSION=%%v
+    for /f "delims=" %%v in ('npm -v') do set NPM_VERSION=%%v
+  ) else (
+    echo 请手动升级 Node.js 到 18+ 后重试
+    pause
+    exit /b 1
+  )
+)
 echo OK  Node.js !NODE_VERSION!  ·  npm !NPM_VERSION!
 
 REM ---- [2/5] 配置 npm 国内镜像 ----
@@ -94,8 +119,14 @@ echo [2/5] 配置淘宝 npm 镜像
 for /f "delims=" %%v in ('npm config get registry') do set CURRENT_REG=%%v
 echo !CURRENT_REG! | findstr /C:"npmmirror" >nul
 if !errorlevel! neq 0 (
-  call npm config set registry https://registry.npmmirror.com
-  echo OK  已切到 registry.npmmirror.com
+  echo //  当前 registry: !CURRENT_REG!
+  set /p SWITCH_REG="切到淘宝镜像吗？(y/n，默认 y) "
+  if /i not "!SWITCH_REG!"=="n" (
+    call npm config set registry https://registry.npmmirror.com
+    echo OK  已切到 registry.npmmirror.com
+  ) else (
+    echo !  保留原 registry（如果装得慢就重跑本脚本切换）
+  )
 ) else (
   echo OK  已经是国内镜像
 )
@@ -215,33 +246,66 @@ set CONFIG_DIR=%USERPROFILE%\.claude-code-router
 set CONFIG_PATH=!CONFIG_DIR!\config.json
 if not exist "!CONFIG_DIR!" mkdir "!CONFIG_DIR!"
 
+set SKIP_WRITE=
 if exist "!CONFIG_PATH!" (
+  echo.
+  echo !  已检测到旧的 config.json
+  echo    !CONFIG_PATH!
+  echo.
+  echo   1  覆盖   用新选的 !PROVIDER_LABEL! 替换全部（旧的会备份）
+  echo   2  追加   把 !PROVIDER_LABEL! 加到 Providers 数组里（保留其它）
+  echo   3  跳过   不动 config，安装到此结束
+  echo.
+
+:choose_cfg
+  set /p CFG_CHOICE="选 1-3: "
+  if "!CFG_CHOICE!"=="1" goto cfg_ok
+  if "!CFG_CHOICE!"=="2" goto cfg_ok
+  if "!CFG_CHOICE!"=="3" goto cfg_ok
+  echo 请输入 1、2 或 3
+  goto choose_cfg
+
+:cfg_ok
+  REM 备份
   for /f "tokens=2 delims==" %%t in ('wmic os get localdatetime /value ^| find "="') do set BACKUP_TS=%%t
   copy "!CONFIG_PATH!" "!CONFIG_PATH!.backup.!BACKUP_TS:~0,14!" >nul
   echo //  已备份旧配置
+
+  if "!CFG_CHOICE!"=="3" (
+    echo //  跳过配置写入
+    set SKIP_WRITE=1
+  )
+  if "!CFG_CHOICE!"=="2" (
+    REM 追加模式：用 PowerShell 解析并合并 JSON
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$cfg = Get-Content -Raw -Path '!CONFIG_PATH!' | ConvertFrom-Json; if (-not $cfg.Providers) { $cfg | Add-Member -NotePropertyName 'Providers' -NotePropertyValue @() }; $cfg.Providers = @($cfg.Providers | Where-Object { $_.name -ne '!PROVIDER_NAME!' }); $newProvider = @{ name = '!PROVIDER_NAME!'; api_base_url = '!BASE_URL!'; api_key = '!API_KEY!'; models = (ConvertFrom-Json '!MODELS_JSON!'); transformer = (ConvertFrom-Json '!TRANSFORMER_JSON!') }; $cfg.Providers += [PSCustomObject]$newProvider; if (-not $cfg.Router) { $cfg | Add-Member -NotePropertyName 'Router' -NotePropertyValue ([PSCustomObject]@{}) }; $cfg.Router | Add-Member -NotePropertyName 'default' -NotePropertyValue '!PROVIDER_NAME!,!DEFAULT_MODEL!' -Force; ($cfg | ConvertTo-Json -Depth 10) | Out-File -FilePath '!CONFIG_PATH!' -Encoding UTF8"
+    echo OK  已追加 !PROVIDER_NAME! 到 Providers (default 路由切换到它)
+    set SKIP_WRITE=1
+  )
 )
 
-(
-  echo {
-  echo   "LOG": false,
-  echo   "Providers": [
-  echo     {
-  echo       "name": "!PROVIDER_NAME!",
-  echo       "api_base_url": "!BASE_URL!",
-  echo       "api_key": "!API_KEY!",
-  echo       "models": !MODELS_JSON!,
-  echo       "transformer": !TRANSFORMER_JSON!
-  echo     }
-  echo   ],
-  echo   "Router": {
-  echo     "default": "!PROVIDER_NAME!,!DEFAULT_MODEL!",
-  echo     "background": "!PROVIDER_NAME!,!DEFAULT_MODEL!",
-  echo     "think": "!PROVIDER_NAME!,!DEFAULT_MODEL!",
-  echo     "longContext": "!PROVIDER_NAME!,!DEFAULT_MODEL!"
-  echo   }
-  echo }
-) > "!CONFIG_PATH!"
-echo OK  配置已写入 !CONFIG_PATH!
+if not defined SKIP_WRITE (
+  (
+    echo {
+    echo   "LOG": false,
+    echo   "Providers": [
+    echo     {
+    echo       "name": "!PROVIDER_NAME!",
+    echo       "api_base_url": "!BASE_URL!",
+    echo       "api_key": "!API_KEY!",
+    echo       "models": !MODELS_JSON!,
+    echo       "transformer": !TRANSFORMER_JSON!
+    echo     }
+    echo   ],
+    echo   "Router": {
+    echo     "default": "!PROVIDER_NAME!,!DEFAULT_MODEL!",
+    echo     "background": "!PROVIDER_NAME!,!DEFAULT_MODEL!",
+    echo     "think": "!PROVIDER_NAME!,!DEFAULT_MODEL!",
+    echo     "longContext": "!PROVIDER_NAME!,!DEFAULT_MODEL!"
+    echo   }
+    echo }
+  ) > "!CONFIG_PATH!"
+  echo OK  配置已写入 !CONFIG_PATH!
+)
 
 REM ---- 完成 ----
 echo.
