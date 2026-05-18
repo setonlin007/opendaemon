@@ -15,7 +15,23 @@
 
   📂 Mac 用户：
      双击 → claude-code-installer.command
-     · 提示"无法打开"时：右键 → 打开 → 再点打开
+
+     ⚠️ 如果弹"Apple 无法验证 / 未打开"且只能选「完成 / 移到废纸篓」：
+        这是 macOS 13+ 的 Gatekeeper 拦截。三种解决办法选一个：
+
+        ▸ 最快（终端 1 行）：
+          xattr -d com.apple.quarantine ~/Downloads/claude-code-installer.command
+          然后回 Finder 双击就行了
+
+        ▸ 不下载文件直接跑（推荐）：
+          bash <(curl -fsSL https://github.com/setonlin007/opendaemon/raw/main/public/installers/claude-code-installer.command)
+
+        ▸ 系统设置点开（图形界面）：
+          1. 关掉警告（按"完成"，别按移到废纸篓）
+          2. 系统设置 → 隐私与安全性 → 滚到最底
+          3. 找到被拦截的提示 → 点"仍要打开"
+          4. 回 Finder 双击文件 → 这次会有"打开"按钮
+
      · 装 Node.js 时会要管理员密码（开机密码）
 
   📂 Windows 用户：
