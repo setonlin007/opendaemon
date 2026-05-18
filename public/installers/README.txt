@@ -21,7 +21,11 @@
 
         ▸ 最快（终端 1 行）：
           xattr -d com.apple.quarantine ~/Downloads/claude-code-installer.command
+          chmod +x ~/Downloads/claude-code-installer.command
           然后回 Finder 双击就行了
+
+          或者合并成 1 条：
+          xattr -d com.apple.quarantine ~/Downloads/claude-code-installer.command && chmod +x ~/Downloads/claude-code-installer.command && open ~/Downloads/claude-code-installer.command
 
         ▸ 不下载文件直接跑（推荐）：
           bash <(curl -fsSL https://github.com/setonlin007/opendaemon/raw/main/public/installers/claude-code-installer.command)
