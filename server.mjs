@@ -1468,11 +1468,13 @@ const server = http.createServer(async (req, res) => {
     const contentType = MIME[ext] || "application/octet-stream";
     const fileName = relativePath.split("/").pop();
     const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml",".html",".htm",".mp4",".webm",".m4v",".mov",".ogg",".ogv",".mp3",".wav",".m4a",".aac",".flac"].includes(ext);
-    const disposition = previewable ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
+    // ?download=1 强制下载（解决 mp4/mp3 默认 inline 播放不下载的问题）
+    const forceDownload = /[?&]download=1\b/.test(req.url);
+    const disposition = (previewable && !forceDownload) ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
     const fileSize = statSync(filePath).size;
     // ── Range request 支持（视频/音频在线播放需要） ──
     const rangeHeader = req.headers.range;
-    if (rangeHeader && previewable) {
+    if (rangeHeader && previewable && !forceDownload) {
       const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
       if (m) {
         let start = m[1] ? parseInt(m[1], 10) : 0;
@@ -1605,11 +1607,13 @@ const server = http.createServer(async (req, res) => {
       const fileName = relativePath.split("/").pop();
       // Images / video / audio / docs: serve inline; others: download
       const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml",".html",".htm",".mp4",".webm",".m4v",".mov",".ogg",".ogv",".mp3",".wav",".m4a",".aac",".flac"].includes(ext);
-      const disposition = previewable ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
+      // ?download=1 强制下载（解决 mp4/mp3 默认 inline 播放不下载的问题）
+      const forceDownload = /[?&]download=1\b/.test(req.url);
+      const disposition = (previewable && !forceDownload) ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
       const fileSize = statSync(filePath).size;
       // ── Range request 支持（视频/音频在线播放需要） ──
       const rangeHeader = req.headers.range;
-      if (rangeHeader && previewable) {
+      if (rangeHeader && previewable && !forceDownload) {
         const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
         if (m) {
           let start = m[1] ? parseInt(m[1], 10) : 0;
