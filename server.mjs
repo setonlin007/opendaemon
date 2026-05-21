@@ -4,7 +4,7 @@ import https from "https";
 import { randomUUID } from "crypto";
 import { fileURLToPath } from "url";
 import { dirname, join, basename, resolve } from "path";
-import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, writeFileSync } from "fs";
+import { readFileSync, existsSync, statSync, readdirSync, mkdirSync, writeFileSync, createReadStream } from "fs";
 import { execSync, exec } from "child_process";
 import { homedir } from "os";
 
@@ -103,6 +103,19 @@ const MIME = {
   ".zip": "application/zip",
   ".py": "text/x-python; charset=utf-8",
   ".sh": "text/x-shellscript; charset=utf-8",
+  // ── video ──
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
+  ".ogv": "video/ogg",
+  // ── audio ──
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".m4a": "audio/mp4",
+  ".aac": "audio/aac",
+  ".ogg": "audio/ogg",
+  ".flac": "audio/flac",
 };
 
 // ── Version check ──
@@ -1454,12 +1467,39 @@ const server = http.createServer(async (req, res) => {
     const ext = filePath.substring(filePath.lastIndexOf(".")).toLowerCase();
     const contentType = MIME[ext] || "application/octet-stream";
     const fileName = relativePath.split("/").pop();
-    const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml",".html",".htm"].includes(ext);
+    const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml",".html",".htm",".mp4",".webm",".m4v",".mov",".ogg",".ogv",".mp3",".wav",".m4a",".aac",".flac"].includes(ext);
     const disposition = previewable ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
+    const fileSize = statSync(filePath).size;
+    // ── Range request 支持（视频/音频在线播放需要） ──
+    const rangeHeader = req.headers.range;
+    if (rangeHeader && previewable) {
+      const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+      if (m) {
+        let start = m[1] ? parseInt(m[1], 10) : 0;
+        let end = m[2] ? parseInt(m[2], 10) : fileSize - 1;
+        if (isNaN(start)) start = 0;
+        if (isNaN(end) || end >= fileSize) end = fileSize - 1;
+        if (start > end || start >= fileSize) {
+          res.writeHead(416, { "Content-Range": `bytes */${fileSize}` });
+          res.end();
+          return;
+        }
+        res.writeHead(206, {
+          "Content-Type": contentType,
+          "Content-Disposition": disposition,
+          "Content-Length": end - start + 1,
+          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+          "Accept-Ranges": "bytes",
+        });
+        createReadStream(filePath, { start, end }).pipe(res);
+        return;
+      }
+    }
     res.writeHead(200, {
       "Content-Type": contentType,
       "Content-Disposition": disposition,
-      "Content-Length": statSync(filePath).size,
+      "Content-Length": fileSize,
+      "Accept-Ranges": "bytes",
     });
     res.end(readFileSync(filePath));
     return;
@@ -1563,13 +1603,40 @@ const server = http.createServer(async (req, res) => {
       const ext = filePath.substring(filePath.lastIndexOf(".")).toLowerCase();
       const contentType = MIME[ext] || "application/octet-stream";
       const fileName = relativePath.split("/").pop();
-      // Images and previewable types: serve inline; others: download
-      const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml",".html",".htm"].includes(ext);
+      // Images / video / audio / docs: serve inline; others: download
+      const previewable = [".png",".jpg",".jpeg",".gif",".webp",".svg",".txt",".md",".csv",".json",".pdf",".xml",".html",".htm",".mp4",".webm",".m4v",".mov",".ogg",".ogv",".mp3",".wav",".m4a",".aac",".flac"].includes(ext);
       const disposition = previewable ? `inline; filename="${fileName}"` : `attachment; filename="${fileName}"`;
+      const fileSize = statSync(filePath).size;
+      // ── Range request 支持（视频/音频在线播放需要） ──
+      const rangeHeader = req.headers.range;
+      if (rangeHeader && previewable) {
+        const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+        if (m) {
+          let start = m[1] ? parseInt(m[1], 10) : 0;
+          let end = m[2] ? parseInt(m[2], 10) : fileSize - 1;
+          if (isNaN(start)) start = 0;
+          if (isNaN(end) || end >= fileSize) end = fileSize - 1;
+          if (start > end || start >= fileSize) {
+            res.writeHead(416, { "Content-Range": `bytes */${fileSize}` });
+            res.end();
+            return;
+          }
+          res.writeHead(206, {
+            "Content-Type": contentType,
+            "Content-Disposition": disposition,
+            "Content-Length": end - start + 1,
+            "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+            "Accept-Ranges": "bytes",
+          });
+          createReadStream(filePath, { start, end }).pipe(res);
+          return;
+        }
+      }
       res.writeHead(200, {
         "Content-Type": contentType,
         "Content-Disposition": disposition,
-        "Content-Length": statSync(filePath).size,
+        "Content-Length": fileSize,
+        "Accept-Ranges": "bytes",
       });
       res.end(readFileSync(filePath));
     } catch (err) {
