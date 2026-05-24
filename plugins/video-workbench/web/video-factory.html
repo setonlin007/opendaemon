@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Video Workbench · OpenDaemon</title>
+<style>
+:root{
+  --bg:#0B0E14;
+  --panel:#161B27;
+  --ink:#E8EAF0;
+  --ink-dim:#8B91A3;
+  --coral:#D97757;
+  --coral-soft:#E89673;
+  --mint:#4ADE80;
+  --red:#F87171;
+  --line:rgba(255,255,255,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+html,body{
+  height:100%;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,"Inter","PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
+  font-size:14px;line-height:1.5;
+}
+body{display:grid;grid-template-columns:240px 1fr;height:100vh}
+
+/* sidebar */
+aside{
+  background:var(--panel);border-right:1px solid var(--line);
+  padding:18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;
+}
+aside h1{font-size:15px;font-weight:700;color:var(--coral);letter-spacing:.04em}
+aside h1 small{color:var(--ink-dim);font-weight:400}
+.btn{
+  background:var(--coral);color:#0a0d13;border:none;padding:10px 14px;border-radius:8px;
+  font-weight:600;cursor:pointer;font-size:13px;font-family:inherit;width:100%;
+  transition:opacity .15s;
+}
+.btn:hover{opacity:.9}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.secondary{background:rgba(255,255,255,.06);color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:rgba(248,113,113,.15);color:var(--red);border:1px solid var(--red)}
+.proj-list{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.proj-list .item{
+  background:rgba(255,255,255,.03);border:1px solid var(--line);
+  padding:10px 12px;border-radius:8px;cursor:pointer;transition:background .15s;
+}
+.proj-list .item:hover{background:rgba(217,119,87,.08);border-color:var(--coral)}
+.proj-list .item.active{background:rgba(217,119,87,.15);border-color:var(--coral)}
+.proj-list .item .title{font-weight:600;font-size:13px}
+.proj-list .item .meta{font-size:11px;color:var(--ink-dim);margin-top:2px}
+.proj-list .empty{color:var(--ink-dim);text-align:center;padding:20px 0;font-size:13px}
+
+/* main */
+main{padding:32px 40px;overflow-y:auto;display:flex;flex-direction:column;gap:24px}
+.page-hd{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:14px}
+.page-hd h2{font-size:22px;font-weight:700}
+.page-hd .sub{color:var(--ink-dim);font-size:13px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.tabs .tab{
+  background:none;border:none;color:var(--ink-dim);padding:10px 16px;cursor:pointer;
+  border-bottom:2px solid transparent;font-family:inherit;font-size:13px;font-weight:500;
+}
+.tabs .tab.active{color:var(--coral);border-bottom-color:var(--coral)}
+.tabs .tab:hover{color:var(--ink)}
+
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 24px;
+}
+.card h3{font-size:15px;font-weight:600;margin-bottom:10px}
+.form-row{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.form-row label{font-size:12px;color:var(--ink-dim);font-weight:500}
+.form-row input,.form-row textarea,.form-row select{
+  background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--ink);
+  padding:8px 12px;border-radius:6px;font-family:inherit;font-size:13px;
+}
+.form-row input:focus,.form-row textarea:focus{outline:none;border-color:var(--coral)}
+.hint{color:var(--ink-dim);font-size:12px;margin-top:4px}
+.row{display:flex;gap:12px}.row > *{flex:1}
+
+.toast{
+  position:fixed;bottom:20px;right:20px;
+  background:var(--panel);border:1px solid var(--line);padding:12px 16px;border-radius:8px;
+  z-index:99;max-width:400px;
+}
+.toast.success{border-color:var(--mint)}
+.toast.error{border-color:var(--red)}
+
+.kbd{
+  background:rgba(255,255,255,.08);border:1px solid var(--line);padding:1px 6px;
+  border-radius:4px;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;
+}
+
+/* status pill */
+.pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;letter-spacing:.02em}
+.pill.brief{background:rgba(255,255,255,.08);color:var(--ink-dim)}
+.pill.content{background:rgba(74,222,128,.15);color:var(--mint)}
+.pill.audio{background:rgba(217,119,87,.18);color:var(--coral)}
+.pill.recording{background:rgba(232,150,115,.18);color:var(--coral-soft)}
+.pill.archived{background:rgba(248,113,113,.15);color:var(--red)}
+
+/* manifest viewer */
+pre.json{
+  background:rgba(0,0,0,.3);border:1px solid var(--line);padding:14px 18px;border-radius:8px;
+  font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;
+  overflow-x:auto;white-space:pre;color:var(--ink-dim);
+}
+pre.json .key{color:var(--coral)}
+pre.json .str{color:var(--mint)}
+pre.json .num{color:var(--coral-soft)}
+</style>
+</head>
+<body>
+
+<aside>
+  <h1>🎬 Workbench <small>v0.1</small></h1>
+  <button class="btn" id="btn-new">+ New Project</button>
+  <button class="btn secondary" id="btn-keys">🔑 API Keys</button>
+  <div class="proj-list" id="proj-list">
+    <div class="empty">loading…</div>
+  </div>
+  <div style="margin-top:auto;font-size:11px;color:var(--ink-dim);text-align:center;padding-top:14px;border-top:1px solid var(--line)">
+    OpenDaemon · Plugin
+  </div>
+</aside>
+
+<main id="main">
+  <div class="page-hd">
+    <div>
+      <h2 id="page-title">Welcome</h2>
+      <div class="sub" id="page-sub">从左边选一个项目，或新建</div>
+    </div>
+    <div id="page-actions"></div>
+  </div>
+  <div id="page-body"></div>
+</main>
+
+<script>
+/* ============================================================
+   状态
+   ============================================================ */
+const state = {
+  projects: [],
+  currentId: null,
+  currentProject: null,
+  manifest: null,
+};
+
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m])}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    ...opts,
+  });
+  if (!r.ok) {
+    let err;
+    try { err = await r.json(); } catch { err = { error: r.statusText }; }
+    throw new Error(err.error || `HTTP ${r.status}`);
+  }
+  return r.json();
+}
+
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+/* ============================================================
+   路由（hash）
+   ============================================================ */
+function parseHash() {
+  const h = location.hash.slice(1) || '/projects';
+  const m = h.match(/^\/p\/([\w-]+)(?:\/(\w+))?/);
+  if (m) return { page: 'project', id: m[1], tab: m[2] || 'overview' };
+  if (h === '/keys') return { page: 'keys' };
+  return { page: 'projects' };
+}
+
+window.addEventListener('hashchange', render);
+
+/* ============================================================
+   渲染
+   ============================================================ */
+async function refreshProjects() {
+  const data = await api('/api/vf/projects');
+  state.projects = data.projects;
+  renderSidebar();
+}
+
+function renderSidebar() {
+  const cur = parseHash();
+  const list = $('proj-list');
+  if (!state.projects.length) {
+    list.innerHTML = '<div class="empty">还没有项目</div>';
+    return;
+  }
+  list.innerHTML = state.projects.map(p => `
+    <div class="item ${cur.page === 'project' && cur.id === p.id ? 'active' : ''}" data-id="${p.id}">
+      <div class="title">${esc(p.title)}</div>
+      <div class="meta">
+        <span class="pill ${esc(p.status)}">${esc(p.status)}</span>
+        · ${esc(p.slug)}
+      </div>
+    </div>
+  `).join('');
+  list.querySelectorAll('.item').forEach(el => {
+    el.onclick = () => { location.hash = `#/p/${el.dataset.id}`; };
+  });
+}
+
+async function render() {
+  const cur = parseHash();
+  if (cur.page === 'projects') return renderProjectsPage();
+  if (cur.page === 'keys') return renderKeysPage();
+  if (cur.page === 'project') return renderProjectPage(cur.id, cur.tab);
+}
+
+function renderProjectsPage() {
+  $('page-title').textContent = 'Projects';
+  $('page-sub').textContent = `${state.projects.length} 个项目`;
+  $('page-actions').innerHTML = '';
+  $('page-body').innerHTML = state.projects.length
+    ? `<div class="card"><p style="color:var(--ink-dim)">从左侧选一个项目，或点 "+ New Project" 新建。</p></div>`
+    : `<div class="card">
+        <h3>欢迎使用 Video Workbench v0.1</h3>
+        <p style="color:var(--ink-dim);margin-top:8px">这是一个把 <code>video-factory</code> skill 包成图形界面的可插拔插件。<br>点左上角 <b>+ New Project</b> 开始第一个视频项目。</p>
+       </div>`;
+  renderSidebar();
+}
+
+function renderKeysPage() {
+  $('page-title').textContent = 'API Keys';
+  $('page-sub').textContent = '存到独立 vf.db · AES-256-GCM 加密';
+  $('page-actions').innerHTML = '';
+  loadKeysCard();
+}
+
+async function loadKeysCard() {
+  try {
+    const data = await api('/api/vf/keys');
+    const keys = data.keys || [];
+    $('page-body').innerHTML = `
+      <div class="card">
+        <h3>已存 keys</h3>
+        ${keys.length
+          ? '<table style="width:100%;border-collapse:collapse;margin-top:10px">' +
+            '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Provider</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Label</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Created</th><th></th></tr></thead><tbody>' +
+            keys.map(k => `<tr>
+              <td style="padding:6px 8px">${esc(k.provider)}</td>
+              <td style="padding:6px 8px">${esc(k.label)}</td>
+              <td style="padding:6px 8px;color:var(--ink-dim);font-size:12px">${new Date(k.created_at).toLocaleString()}</td>
+              <td style="padding:6px 8px"><button class="btn danger" style="width:auto;padding:4px 10px" onclick="deleteKey('${esc(k.provider)}','${esc(k.label)}')">删除</button></td>
+            </tr>`).join('') +
+            '</tbody></table>'
+          : '<p style="color:var(--ink-dim);margin-top:8px">还没有存任何 key</p>'
+        }
+      </div>
+      <div class="card">
+        <h3>添加 / 更新 key</h3>
+        <div class="row">
+          <div class="form-row">
+            <label>Provider</label>
+            <select id="key-provider">
+              <option value="minimax">MiniMax (T2A v2)</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="volcengine">火山引擎</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Label（多个 key 区分）</label>
+            <input type="text" id="key-label" value="default">
+          </div>
+        </div>
+        <div class="form-row">
+          <label>API Key</label>
+          <input type="password" id="key-value" placeholder="sk-...">
+          <div class="hint">用 daemon auth password 派生的 AES-256-GCM 加密。不出库时永远是密文。</div>
+        </div>
+        <button class="btn" onclick="saveKey()">保存</button>
+      </div>
+    `;
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function saveKey() {
+  const provider = $('key-provider').value;
+  const label = $('key-label').value || 'default';
+  const key = $('key-value').value.trim();
+  if (!key) return toast('key 不能为空', 'error');
+  try {
+    await api('/api/vf/keys', { method: 'POST', body: JSON.stringify({ provider, label, key }) });
+    toast('已加密保存', 'success');
+    $('key-value').value = '';
+    loadKeysCard();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteKey(provider, label) {
+  if (!confirm(`删除 ${provider}/${label}？`)) return;
+  try {
+    await fetch(`/api/vf/keys/${provider}/${label}`, { method: 'DELETE' });
+    toast('已删除', 'success');
+    loadKeysCard();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function renderProjectPage(id, tab) {
+  try {
+    const data = await api(`/api/vf/projects/${id}`);
+    state.currentProject = data.project;
+    state.manifest = data.manifest;
+    state.currentId = id;
+
+    $('page-title').innerHTML = esc(data.project.title) + ' <span class="pill ' + esc(data.project.status) + '">' + esc(data.project.status) + '</span>';
+    $('page-sub').textContent = `slug: ${data.project.slug} · ${data.project.workspace_path}`;
+    $('page-actions').innerHTML = `
+      <button class="btn danger" style="width:auto;padding:6px 12px" onclick="archiveProject('${id}')">归档</button>
+    `;
+    $('page-body').innerHTML = `
+      <div class="tabs">
+        <button class="tab ${tab === 'overview' ? 'active' : ''}" onclick="location.hash='#/p/${id}/overview'">Overview</button>
+        <button class="tab ${tab === 'brief' ? 'active' : ''}" onclick="location.hash='#/p/${id}/brief'">Brief</button>
+        <button class="tab ${tab === 'content' ? 'active' : ''}" onclick="location.hash='#/p/${id}/content'">Content</button>
+        <button class="tab ${tab === 'audio' ? 'active' : ''}" onclick="location.hash='#/p/${id}/audio'">Audio</button>
+        <button class="tab ${tab === 'recording' ? 'active' : ''}" onclick="location.hash='#/p/${id}/recording'">Recording</button>
+        <button class="tab ${tab === 'publish' ? 'active' : ''}" onclick="location.hash='#/p/${id}/publish'">Publish</button>
+      </div>
+      <div id="tab-body"></div>
+    `;
+    renderTabBody(tab, data);
+    renderSidebar();
+  } catch (e) {
+    toast(e.message, 'error');
+    $('page-body').innerHTML = `<div class="card"><p style="color:var(--red)">${esc(e.message)}</p></div>`;
+  }
+}
+
+function renderTabBody(tab, data) {
+  const body = $('tab-body');
+  if (tab === 'overview') {
+    body.innerHTML = `
+      <div class="card">
+        <h3>Manifest</h3>
+        <pre class="json">${syntaxJson(JSON.stringify(data.manifest || {}, null, 2))}</pre>
+      </div>
+      <div class="card">
+        <h3>最近运行</h3>
+        ${(data.runs || []).length
+          ? '<table style="width:100%;border-collapse:collapse;margin-top:8px"><thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Phase</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Status</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Time</th></tr></thead><tbody>' +
+            (data.runs || []).map(r => `<tr>
+              <td style="padding:6px 8px">${esc(r.phase)}</td>
+              <td style="padding:6px 8px">${esc(r.status)}</td>
+              <td style="padding:6px 8px;color:var(--ink-dim);font-size:12px">${r.started_at ? new Date(r.started_at).toLocaleString() : '-'}</td>
+            </tr>`).join('') + '</tbody></table>'
+          : '<p style="color:var(--ink-dim);margin-top:8px">还没运行过任何 phase</p>'
+        }
+      </div>
+    `;
+    return;
+  }
+  if (tab === 'brief') {
+    body.innerHTML = `
+      <div class="card">
+        <h3>项目简报</h3>
+        <p style="color:var(--ink-dim);margin-bottom:14px">填完保存到 <code>brief.json</code>，Content 阶段会读它。</p>
+        <div class="form-row">
+          <label>主题</label>
+          <input id="brief-topic" type="text" value="${esc(data.project.title)}">
+        </div>
+        <div class="form-row">
+          <label>受众 / 平台</label>
+          <input id="brief-audience" type="text" placeholder="如：B 站 + 小红书 · 非技术运营">
+        </div>
+        <div class="row">
+          <div class="form-row">
+            <label>目标时长（秒）</label>
+            <input id="brief-duration" type="number" value="240" min="60" max="3600">
+          </div>
+          <div class="form-row">
+            <label>风格</label>
+            <input id="brief-tone" type="text" placeholder="如：钩子焦虑，主体专业，结尾 CTA">
+          </div>
+        </div>
+        <button class="btn" onclick="saveBrief()">保存简报</button>
+      </div>
+    `;
+    return;
+  }
+  // 其余 tab 占位
+  body.innerHTML = `
+    <div class="card">
+      <h3>${tab}</h3>
+      <p style="color:var(--ink-dim)">这个 tab 在 Iter 1 还没实现。当前 v0.1 重点：Project CRUD + Brief + API Keys。</p>
+    </div>
+  `;
+}
+
+async function saveBrief() {
+  const data = {
+    topic: $('brief-topic').value,
+    audience: $('brief-audience').value,
+    duration_target_s: parseInt($('brief-duration').value, 10) || 240,
+    tone: $('brief-tone').value,
+  };
+  try {
+    await api(`/api/vf/projects/${state.currentId}/brief`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    toast('已保存 brief.json', 'success');
+    refreshProjects();
+    render();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function archiveProject(id) {
+  if (!confirm('归档这个项目？(目录文件不删，可以以后回收)')) return;
+  try {
+    await fetch(`/api/vf/projects/${id}`, { method: 'DELETE' });
+    toast('已归档', 'success');
+    location.hash = '#/projects';
+    refreshProjects();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ============================================================
+   新建项目
+   ============================================================ */
+$('btn-new').onclick = async () => {
+  const slug = prompt('项目 slug（a-z 0-9 - 仅小写，决定目录名）');
+  if (!slug) return;
+  const title = prompt('项目标题');
+  if (!title) return;
+  try {
+    const data = await api('/api/vf/projects', {
+      method: 'POST',
+      body: JSON.stringify({ slug, title }),
+    });
+    toast(`项目已创建 → ~/workspace/projects/${slug}/`, 'success');
+    await refreshProjects();
+    location.hash = `#/p/${data.project.id}/brief`;
+  } catch (e) { toast(e.message, 'error'); }
+};
+
+$('btn-keys').onclick = () => location.hash = '#/keys';
+
+/* ============================================================
+   JSON 着色
+   ============================================================ */
+function syntaxJson(str) {
+  return esc(str)
+    .replace(/(&quot;.*?&quot;)(\s*:)/g, '<span class="key">$1</span>$2')
+    .replace(/:\s*(&quot;.*?&quot;)/g, ': <span class="str">$1</span>')
+    .replace(/:\s*(\d+)/g, ': <span class="num">$1</span>');
+}
+
+/* ============================================================
+   bootstrap
+   ============================================================ */
+(async () => {
+  try {
+    await refreshProjects();
+    await render();
+  } catch (e) {
+    if (e.message.includes('unauthorized')) {
+      location.href = '/login.html';
+    } else {
+      toast(e.message, 'error');
+    }
+  }
+})();
+</script>
+</body>
+</html>

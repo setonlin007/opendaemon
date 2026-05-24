@@ -221,6 +221,22 @@ registerEngine({
 });
 await loadPlugins();
 
+// ─────────── Plugin: Video Workbench (可插拔) ───────────
+// 移除步骤: 1) 注释下面 3 行 2) bash plugins/video-workbench/uninstall.sh 3) deploy
+let __vf = null;
+try {
+  const { videoWorkbench } = await import("./plugins/video-workbench/index.mjs");
+  __vf = await videoWorkbench.init({
+    requireAuth: auth.requireAuth,
+    dataDir: join(__dirname, "data"),
+    authSecret: config.auth.password,
+    projectsRoot: join(homedir(), "workspace", "projects"),
+  });
+} catch (err) {
+  console.warn("[plugin] video-workbench load failed (插件可选，跳过):", err.message);
+}
+// ─── End Plugin Mount ───
+
 // Dependencies injected into plugin handleChat calls
 const serverDeps = {
   addMessage,
@@ -419,6 +435,10 @@ const server = http.createServer(async (req, res) => {
 
   // Auth check (returns false and sends response if not authed)
   if (!needsSetup() && !auth.requireAuth(req, res)) return;
+
+  // ─── Plugin: Video Workbench (one-line dispatch · 移除整套靠注释这一段) ───
+  if (__vf && __vf.match(method, path)) return __vf.handle(req, res);
+  // ─── End Plugin Dispatch ───
 
   // ── Auth routes ──
 
