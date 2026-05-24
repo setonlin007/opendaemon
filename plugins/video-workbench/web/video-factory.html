@@ -736,19 +736,10 @@ async function renderRecordingTab(body, data) {
     <div class="card" style="display:none" id="run-panel"></div>
 
     <div class="card">
-      <h3>② 录制方案 A · Playwright VP8（快但糊）</h3>
-      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:12px">
-        VP8 1 Mbps realtime 编码。<br/>
-        ⏱ <b>10 min</b> · 📦 ~50MB · 🖼 画质：<b style="color:var(--red)">糊</b>（适合快速迭代验证视觉时序）
-      </p>
-      <button class="btn secondary" ${(!hasAudio || !hasTiming) ? 'disabled' : ''} onclick="startRecording('${projectId}')">▶ 开始 Playwright 录制</button>
-    </div>
-
-    <div class="card">
-      <h3>③ 录制方案 B · Screenshot Pipe（慢但清晰）⭐</h3>
+      <h3>② Screenshot Pipe 录制（高画质）</h3>
       <p style="color:var(--ink-dim);font-size:13px;margin-bottom:12px">
         逐帧 page.screenshot() → pipe 给 ffmpeg → libx264 CRF 18 编码。<br/>
-        ⏱ <b>15-20 min</b> · 📦 ~100MB · 🖼 画质：<b style="color:var(--mint)">明显比方案 A 清晰</b>（CRF 18 视觉准无损）<br/>
+        ⏱ <b>8-15 min</b> · 📦 ~18MB · 🖼 画质：<b style="color:var(--mint)">CRF 18 视觉准无损</b><br/>
         💻 资源：内存 ~1.5GB · 磁盘临时 ~0（pipe 不落盘）
       </p>
       <div class="row">
@@ -770,7 +761,7 @@ async function renderRecordingTab(body, data) {
           </select>
         </div>
       </div>
-      <button class="btn" ${(!hasAudio || !hasTiming) ? 'disabled' : ''} onclick="startRecordingScreenshot('${projectId}')">▶ 开始 Screenshot 录制（高画质）</button>
+      <button class="btn" ${(!hasAudio || !hasTiming) ? 'disabled' : ''} onclick="startRecordingScreenshot('${projectId}')">▶ 开始录制</button>
     </div>
 
     <div class="card" style="display:none" id="run-panel"></div>
@@ -881,11 +872,6 @@ async function macProcess(projectId) {
 
 function startBuildTiming(projectId) {
   runPhase({ projectId, url: `/api/vf/projects/${projectId}/build-timing`, panelEl: $('run-panel') });
-}
-
-function startRecording(projectId) {
-  if (!confirm('Playwright VP8 录制约 10 分钟，画质糊但快。继续？')) return;
-  runPhase({ projectId, url: `/api/vf/projects/${projectId}/recording/playwright`, panelEl: $('run-panel') });
 }
 
 function startRecordingScreenshot(projectId) {
