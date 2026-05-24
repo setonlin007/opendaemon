@@ -222,15 +222,18 @@ registerEngine({
 await loadPlugins();
 
 // ─────────── Plugin: Video Workbench (可插拔) ───────────
-// 移除步骤: 1) 注释下面 3 行 2) bash plugins/video-workbench/uninstall.sh 3) deploy
+// 移除步骤: 1) 注释下面这一段 2) bash plugins/video-workbench/uninstall.sh 3) deploy
 let __vf = null;
 try {
   const { videoWorkbench } = await import("./plugins/video-workbench/index.mjs");
+  const { streamClaude } = await import("./lib/engine-claude.mjs");
   __vf = await videoWorkbench.init({
     requireAuth: auth.requireAuth,
     dataDir: join(__dirname, "data"),
     authSecret: config.auth.password,
     projectsRoot: join(homedir(), "workspace", "projects"),
+    parseMultipart,  // 已在 server.mjs 顶部 import
+    streamClaude,
   });
 } catch (err) {
   console.warn("[plugin] video-workbench load failed (插件可选，跳过):", err.message);

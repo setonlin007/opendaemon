@@ -21,8 +21,10 @@ export const videoWorkbench = {
    * @param {string}   opts.dataDir         - daemon 的 data/ 目录
    * @param {string}   opts.authSecret      - daemon auth.password（用于 key 加密派生）
    * @param {string}   opts.projectsRoot    - 可选，默认 ~/workspace/projects
+   * @param {Function} opts.parseMultipart  - 可选，daemon 的 parseMultipart(req)（不传则文件上传不可用）
+   * @param {Function} opts.streamClaude    - 可选，daemon 的 streamClaude(opts)（不传则 content generate 不可用）
    */
-  async init({ requireAuth, dataDir, authSecret, projectsRoot }) {
+  async init({ requireAuth, dataDir, authSecret, projectsRoot, parseMultipart, streamClaude }) {
     if (!requireAuth) throw new Error("[vf] init: requireAuth callback required");
     if (!dataDir) throw new Error("[vf] init: dataDir required");
     if (!authSecret) throw new Error("[vf] init: authSecret required (for AES key derivation)");
@@ -38,6 +40,8 @@ export const videoWorkbench = {
       daemonAuthSecret: authSecret,
       projectsRoot,
       logsDir,
+      parseMultipart,
+      streamClaude,
     });
 
     console.log("[plugin] video-workbench mounted · UI: /video-factory.html · API: /api/vf/*");

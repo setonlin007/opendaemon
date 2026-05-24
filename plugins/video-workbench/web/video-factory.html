@@ -740,15 +740,107 @@ async function renderRecordingTab(body, data) {
     <div class="card" style="display:none" id="run-panel"></div>
 
     <div class="card">
-      <h3>Mac 手动录屏（高画质备选）</h3>
-      <p style="color:var(--ink-dim);font-size:13px;line-height:1.7">
-        Playwright 输出糊？走 Mac 录屏：60fps · 7-30 Mbps。<br/>
-        详见 <code>plugins/video-workbench/README.md</code> 和 skill <code>PHASE-4B-MANUAL-MAC.md</code>。<br/>
-        v0.1 此入口暂未做 UI，命令行操作：<br/>
-        <code style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:4px">node plugins/video-workbench/migrate-existing.mjs &lt;slug&gt;</code>
+      <h3>🍎 Mac 手动录屏（高画质 60fps）</h3>
+      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:14px">
+        Playwright headless 输出 1Mbps 糊？走 Mac 录屏：60fps · 7-30Mbps。 <br/>
+        <b style="color:var(--coral-soft)">铁律</b>：先 ⌘⇧5 开录屏 → <b>再</b>按 Enter 触发播放（顺序错就丢首镜）。
       </p>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="padding:10px 12px;background:rgba(255,255,255,.03);border-radius:8px">
+          <b style="font-size:13px">Step 1 · 合 master audio</b>
+          <p style="font-size:12px;color:var(--ink-dim);margin:4px 0">把 31 段 mp3 拼成单条 m4a，给 mux 用。</p>
+          <button class="btn secondary" style="padding:6px 14px;font-size:12px;width:auto" onclick="macBuildMaster('${projectId}')">▶ build-master-audio</button>
+        </div>
+
+        <div style="padding:10px 12px;background:rgba(255,255,255,.03);border-radius:8px">
+          <b style="font-size:13px">Step 2 · 上传 .mov 录屏</b>
+          <p style="font-size:12px;color:var(--ink-dim);margin:4px 0">在 Mac 用 ⌘⇧5 录完后传上来。</p>
+          <input id="mac-mov-file" type="file" accept="video/quicktime,video/mp4,video/*" style="font-size:12px;color:var(--ink-dim)">
+          <button class="btn secondary" style="padding:6px 14px;font-size:12px;width:auto;margin-left:8px" onclick="macUpload('${projectId}')">⬆ 上传到 uploads/</button>
+          <div id="mac-upload-result" style="font-size:12px;color:var(--mint);margin-top:6px"></div>
+        </div>
+
+        <div style="padding:10px 12px;background:rgba(255,255,255,.03);border-radius:8px">
+          <b style="font-size:13px">Step 3 · Analyze 自动推 trim/crop</b>
+          <p style="font-size:12px;color:var(--ink-dim);margin:4px 0">扫帧大小变化定 click 时刻；扫黑边定 crop。结果填到 Step 4。</p>
+          <input id="mac-analyze-mov" type="text" placeholder="uploads/录屏xxx.mov" style="width:300px;font-size:12px">
+          <button class="btn secondary" style="padding:6px 14px;font-size:12px;width:auto" onclick="macAnalyze('${projectId}')">▶ analyze</button>
+        </div>
+
+        <div style="padding:10px 12px;background:rgba(255,255,255,.03);border-radius:8px">
+          <b style="font-size:13px">Step 4 · Process (crop + scale + mux + encode)</b>
+          <p style="font-size:12px;color:var(--ink-dim);margin:4px 0">trim_start 单位秒，crop 格式 <code>w:h:x:y</code> 或留空。</p>
+          <div class="row">
+            <div class="form-row">
+              <label>.mov 路径</label>
+              <input id="mac-process-mov" type="text" placeholder="uploads/录屏xxx.mov" style="font-size:12px">
+            </div>
+            <div class="form-row">
+              <label>trim_start (秒)</label>
+              <input id="mac-trim" type="number" value="0" step="0.1" style="font-size:12px">
+            </div>
+            <div class="form-row">
+              <label>crop (w:h:x:y 可空)</label>
+              <input id="mac-crop" type="text" placeholder="2940:1654:0:166" style="font-size:12px">
+            </div>
+          </div>
+          <button class="btn" onclick="macProcess('${projectId}')">▶ Process · 出 final-v{N}.mp4</button>
+        </div>
+      </div>
     </div>
   `;
+}
+
+async function macBuildMaster(projectId) {
+  runPhase({ projectId, url: `/api/vf/projects/${projectId}/mac/build-master-audio`, panelEl: $('run-panel') });
+}
+
+async function macUpload(projectId) {
+  const input = $('mac-mov-file');
+  const file = input.files[0];
+  if (!file) return toast('选个文件先', 'error');
+  $('mac-upload-result').textContent = '上传中...';
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch(`/api/vf/projects/${projectId}/uploads`, { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'upload failed');
+    const f = d.files[0];
+    $('mac-upload-result').textContent = `✓ ${f.rel_path} · ${formatSize(f.size)}`;
+    $('mac-analyze-mov').value = f.rel_path;
+    $('mac-process-mov').value = f.rel_path;
+    toast('上传成功', 'success');
+  } catch (e) {
+    $('mac-upload-result').textContent = '✗ ' + e.message;
+    toast(e.message, 'error');
+  }
+}
+
+async function macAnalyze(projectId) {
+  const mov_rel = $('mac-analyze-mov').value.trim();
+  if (!mov_rel) return toast('填 .mov 路径', 'error');
+  runPhase({
+    projectId,
+    url: `/api/vf/projects/${projectId}/mac/analyze`,
+    params: { mov_rel },
+    panelEl: $('run-panel'),
+  });
+}
+
+async function macProcess(projectId) {
+  const mov_rel = $('mac-process-mov').value.trim();
+  const trim_start = parseFloat($('mac-trim').value) || 0;
+  const crop = $('mac-crop').value.trim();
+  if (!mov_rel) return toast('填 .mov 路径', 'error');
+  if (!confirm(`开始 Mac process · trim=${trim_start}s · crop=${crop || '(auto)'}\n约 5-8 min，继续？`)) return;
+  runPhase({
+    projectId,
+    url: `/api/vf/projects/${projectId}/mac/process`,
+    params: { mov_rel, trim_start, crop },
+    panelEl: $('run-panel'),
+  });
 }
 
 function startBuildTiming(projectId) {
@@ -792,15 +884,48 @@ async function renderPublishTab(body, data) {
     ` : ''}
 
     <div class="card">
-      <h3>多平台发布 (P1 / Iter 3 实现)</h3>
-      <p style="color:var(--ink-dim);font-size:13px;line-height:1.7">
-        即将支持：<br/>
-        • B站 / YouTube / 小红书 / 抖音 / 视频号 各平台标题 + 描述 + hashtag 自动生成<br/>
-        • 多尺寸封面（16:9 / 9:16 / 3:4）一键出<br/>
-        • 平台规格速查表 + 复制按钮直达官方上传页
+      <h3>🖼 生成封面候选 (gen-covers.py)</h3>
+      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:10px">
+        从 current final mp4 抓 5 个关键帧 + 套封面模板，生成 5 张 1080×1440 (3:4) 候选。
       </p>
+      <button class="btn" ${!finalCurrent ? 'disabled' : ''} onclick="startGenCovers('${projectId}')">▶ 生成封面</button>
+    </div>
+
+    <div class="card">
+      <h3>📝 多平台发布文案 (Claude SDK)</h3>
+      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:10px">
+        基于 brief + script + outline 一次出 5 个平台文案（B站 / 小红书 / 抖音 / 视频号 / YouTube），保存到 <code>publish/copy.md</code>。
+      </p>
+      <button class="btn" onclick="startPublishCopy('${projectId}')">▶ 生成多平台文案</button>
+    </div>
+
+    <div class="card">
+      <h3>📋 平台规格速查 + 跳转</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 8px;color:var(--ink-dim);font-weight:500">平台</th>
+          <th style="text-align:left;padding:6px 8px;color:var(--ink-dim);font-weight:500">推荐尺寸</th>
+          <th style="text-align:left;padding:6px 8px;color:var(--ink-dim);font-weight:500">时长上限</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          <tr><td style="padding:6px 8px">B站</td><td style="padding:6px 8px">1920×1080 (16:9)</td><td style="padding:6px 8px">&lt; 10h</td><td style="padding:6px 8px"><a href="https://member.bilibili.com/platform/upload/video/frame" target="_blank" class="btn secondary" style="padding:3px 8px;font-size:11px;width:auto;text-decoration:none">投稿</a></td></tr>
+          <tr><td style="padding:6px 8px">小红书</td><td style="padding:6px 8px">1080×1440 (3:4) 或 9:16</td><td style="padding:6px 8px">&lt; 5min</td><td style="padding:6px 8px"><a href="https://creator.xiaohongshu.com/publish/publish" target="_blank" class="btn secondary" style="padding:3px 8px;font-size:11px;width:auto;text-decoration:none">投稿</a></td></tr>
+          <tr><td style="padding:6px 8px">抖音</td><td style="padding:6px 8px">1080×1920 (9:16)</td><td style="padding:6px 8px">&lt; 15min</td><td style="padding:6px 8px"><a href="https://creator.douyin.com/creator-micro/content/upload" target="_blank" class="btn secondary" style="padding:3px 8px;font-size:11px;width:auto;text-decoration:none">投稿</a></td></tr>
+          <tr><td style="padding:6px 8px">视频号</td><td style="padding:6px 8px">720×1280 (9:16)</td><td style="padding:6px 8px">&lt; 60min</td><td style="padding:6px 8px"><a href="https://channels.weixin.qq.com/post/create" target="_blank" class="btn secondary" style="padding:3px 8px;font-size:11px;width:auto;text-decoration:none">投稿</a></td></tr>
+          <tr><td style="padding:6px 8px">YouTube</td><td style="padding:6px 8px">1920×1080</td><td style="padding:6px 8px">&lt; 12h</td><td style="padding:6px 8px"><a href="https://studio.youtube.com" target="_blank" class="btn secondary" style="padding:3px 8px;font-size:11px;width:auto;text-decoration:none">Studio</a></td></tr>
+        </tbody>
+      </table>
     </div>
   `;
+}
+
+function startGenCovers(projectId) {
+  runPhase({ projectId, url: `/api/vf/projects/${projectId}/publish/covers`, panelEl: $('run-panel') });
+}
+
+function startPublishCopy(projectId) {
+  runPhase({ projectId, url: `/api/vf/projects/${projectId}/publish/copy`, panelEl: $('run-panel') });
 }
 
 function startEncode(projectId) {
@@ -812,25 +937,70 @@ function startEncode(projectId) {
 }
 
 /* ============================================================
-   Content tab (P0 占位 + lint 入口)
+   Content tab · Claude SDK 一键生成 + lint
    ============================================================ */
 async function renderContentTab(body, data) {
   const projectId = data.project.id;
+  const hasBrief = (data.versions || []).some(v => /^brief/.test(v.artifact_type)) || true; // brief 总有
+  const hasContent = (data.versions || []).some(v => ['article','script','outline','audio-segments'].includes(v.artifact_type));
+
   body.innerHTML = `
     <div class="card">
-      <h3>口播稿 + outline</h3>
-      <p style="color:var(--ink-dim);font-size:13px;line-height:1.7">
-        Content 阶段当前路径：<br/>
-        1. 在 daemon chat 里跟模型协作出 <code>article.md</code> / <code>script.md</code> / <code>outline.md</code>，写到 <code>${esc(data.project.workspace_path)}</code><br/>
-        2. 准备 <code>audio-segments.json</code>（31 段配音文本）<br/>
-        3. 跑下面的 lint 静态检查 TTS 风险词<br/>
-        4. 通过后去 Audio tab 合成<br/><br/>
-        <i style="color:var(--ink-dim)">Content 一键生成 + diff 编辑 在 Iter 3 做</i>
+      <h3>🪄 一键生成内容 (Claude SDK)</h3>
+      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:10px">
+        基于 Brief 一次出 4 个文件：<code>article.md</code> / <code>script.md</code> / <code>outline.md</code> / <code>audio-segments.json</code>。<br/>
+        生成后自动登记版本，可在 Overview tab 看；想重新生成会出 v2 / v3 / ...
       </p>
-      <button class="btn secondary" onclick="startLint('${projectId}')">▶ 跑 lint</button>
+      ${!hasBrief ? `<p style="color:var(--red);font-size:13px;margin-bottom:10px">⚠ 先在 Brief tab 填表单</p>` : ''}
+      <button class="btn" onclick="startContentGenerate('${projectId}')">▶ Generate content</button>
+      ${hasContent ? `<span style="margin-left:10px;color:var(--mint);font-size:12px">✓ 已有内容产出，再点会生成新版本</span>` : ''}
     </div>
+
     <div class="card" style="display:none" id="run-panel"></div>
+
+    <div class="card">
+      <h3>📋 TTS 静态 Lint</h3>
+      <p style="color:var(--ink-dim);font-size:12px;margin-bottom:10px">合成前先扫风险词（百分号 / 长句 / 破折号），免得烧 ¥¥ 重试。</p>
+      <button class="btn secondary" onclick="startLint('${projectId}')">▶ 跑 sync-audit --lint</button>
+    </div>
+
+    <div class="card">
+      <h3>🎨 视觉网页 Scaffold</h3>
+      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:12px">
+        基于 v9-mac.html 母板生成项目首版 <code>public/index.html</code>。<br/>
+        <b style="color:var(--coral-soft)">提示</b>：scenes 数组 / 动画 / scenes mp3 路径会沿用 v9 默认值。要真跑你自己项目，scenes 数组要按你的 audio-segments 重写（这部分仍需手工，或下版本让 Claude 改）。
+      </p>
+      <div class="row">
+        <div class="form-row">
+          <label>标题</label>
+          <input id="sc-title" type="text" value="${esc(data.project.title)}" placeholder="视频标题">
+        </div>
+        <div class="form-row">
+          <label>主色 (--coral)</label>
+          <input id="sc-accent" type="text" value="#D97757" placeholder="#D97757">
+        </div>
+      </div>
+      <button class="btn" onclick="startScaffold('${projectId}')">▶ 生成 public/index.html</button>
+    </div>
   `;
+}
+
+function startContentGenerate(projectId) {
+  if (!confirm('调 Claude SDK 生成 4 个内容文件，约 30s-2min。继续？')) return;
+  runPhase({ projectId, url: `/api/vf/projects/${projectId}/content/generate`, panelEl: $('run-panel') });
+}
+
+async function startScaffold(projectId) {
+  const title = $('sc-title').value.trim() || '';
+  const accent = $('sc-accent').value.trim() || '#D97757';
+  try {
+    const data = await api(`/api/vf/projects/${projectId}/scaffold`, {
+      method: 'POST',
+      body: JSON.stringify({ title, accent }),
+    });
+    toast(`✓ 已生成 public/index.html v${data.version}`, 'success');
+    setTimeout(() => render(), 500);
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 /* ============================================================

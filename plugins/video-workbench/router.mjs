@@ -78,7 +78,7 @@ function startSSE(req, res) {
 
 // ─────────── 路由 dispatch ───────────
 
-export function createRouter({ daemonAuthSecret, projectsRoot, logsDir }) {
+export function createRouter({ daemonAuthSecret, projectsRoot, logsDir, parseMultipart, streamClaude }) {
   return {
     match(method, path) {
       return path.startsWith("/api/vf/") || path.startsWith("/vf/") || path === "/video-factory.html";
@@ -122,7 +122,7 @@ export function createRouter({ daemonAuthSecret, projectsRoot, logsDir }) {
         if (mProject) {
           const projectId = mProject[1];
           const sub = mProject[2]; // 可能为 undefined, "brief", "content", "audio", ...
-          return await handleProjectRoute({ projectId, sub, method, req, res, projectsRoot, logsDir, daemonAuthSecret });
+          return await handleProjectRoute({ projectId, sub, method, req, res, projectsRoot, logsDir, daemonAuthSecret, parseMultipart, streamClaude });
         }
 
         // ─── Runs ───
@@ -218,7 +218,7 @@ async function handleCreateProject(body, projectsRoot, res) {
   return jsonRes(res, { project }, 201);
 }
 
-async function handleProjectRoute({ projectId, sub, method, req, res, projectsRoot, logsDir, daemonAuthSecret }) {
+async function handleProjectRoute({ projectId, sub, method, req, res, projectsRoot, logsDir, daemonAuthSecret, parseMultipart, streamClaude }) {
   const project = getProject(projectId);
   if (!project) return jsonRes(res, { error: "project not found" }, 404);
 
@@ -309,6 +309,58 @@ async function handleProjectRoute({ projectId, sub, method, req, res, projectsRo
   if (sub?.startsWith("files/")) {
     const rel = sub.substring("files/".length);
     return await serveProjectFile({ project, rel, method, req, res });
+  }
+
+  // ── 文件上传 ──
+  // POST /api/vf/projects/:id/uploads  (multipart) → 落到 <project>/uploads/
+  if (sub === "uploads" && method === "POST") {
+    return await handleUpload({ project, projectId, req, res, parseMultipart });
+  }
+
+  // ── Mac 录屏流程 ──
+  if (sub === "mac/build-master-audio" && method === "POST") {
+    return await handleMacScript({ project, projectId, logsDir, res,
+      phase: "build-master", script: "build-master-audio.py", cmd: "python3", args: [] });
+  }
+  if (sub === "mac/analyze" && method === "POST") {
+    const body = await readJsonBody(req);
+    if (!body.mov_rel) return jsonRes(res, { error: "mov_rel required" }, 400);
+    return await handleMacScript({ project, projectId, logsDir, res,
+      phase: "analyze", script: "analyze-recording.sh", cmd: "bash",
+      args: [join(project.workspace_path, body.mov_rel)] });
+  }
+  if (sub === "mac/process" && method === "POST") {
+    const body = await readJsonBody(req);
+    if (!body.mov_rel) return jsonRes(res, { error: "mov_rel required" }, 400);
+    const trimStart = String(body.trim_start ?? 0);
+    const cropSpec = body.crop || "";
+    return await handleMacProcess({ project, projectId, logsDir, res,
+      movRel: body.mov_rel, trimStart, cropSpec });
+  }
+
+  // ── 发布：封面 ──
+  if (sub === "publish/covers" && method === "POST") {
+    const body = await readJsonBody(req);
+    return await handleGenCovers({ project, projectId, logsDir, res, body });
+  }
+
+  // ── 发布：多平台文案 ──
+  if (sub === "publish/copy" && method === "POST") {
+    if (!streamClaude) return jsonRes(res, { error: "Claude SDK not wired" }, 500);
+    const body = await readJsonBody(req);
+    return await handlePublishCopy({ project, projectId, res, body, streamClaude });
+  }
+
+  // ── Content 一键生成 ──
+  if (sub === "content/generate" && method === "POST") {
+    if (!streamClaude) return jsonRes(res, { error: "Claude SDK not wired" }, 500);
+    return await handleContentGenerate({ project, projectId, res, streamClaude });
+  }
+
+  // ── Scaffold 视觉模板 ──
+  if (sub === "scaffold" && method === "POST") {
+    const body = await readJsonBody(req);
+    return await handleScaffold({ project, projectId, body, res });
   }
 
   return jsonRes(res, { error: `unknown route: /api/vf/projects/${projectId}/${sub}` }, 404);
@@ -482,6 +534,417 @@ async function handleAudioSynth({ project, body, projectId, logsDir, daemonAuthS
   }
   send("end", { ts: Date.now() });
   res.end();
+}
+
+// ─────────── P0-1 文件上传 ───────────
+async function handleUpload({ project, projectId, req, res, parseMultipart }) {
+  if (!parseMultipart) {
+    return jsonRes(res, { error: "multipart parser not wired" }, 500);
+  }
+  try {
+    const { files } = await parseMultipart(req);
+    if (!files.length) return jsonRes(res, { error: "no file uploaded" }, 400);
+    const fs = await import("fs/promises");
+    const { existsSync, mkdirSync } = await import("fs");
+    const uploadsDir = join(project.workspace_path, "uploads");
+    if (!existsSync(uploadsDir)) mkdirSync(uploadsDir, { recursive: true });
+    const saved = [];
+    for (const f of files) {
+      // 防穿越：filename 只允许文件名，不含路径
+      const safeName = (f.filename || "upload.bin").replace(/[\/\\]/g, "_").substring(0, 200);
+      const dst = join(uploadsDir, safeName);
+      await fs.writeFile(dst, f.data);
+      saved.push({
+        filename: safeName,
+        rel_path: `uploads/${safeName}`,
+        size: f.data.length,
+        content_type: f.contentType,
+      });
+    }
+    return jsonRes(res, { ok: true, files: saved });
+  } catch (err) {
+    return jsonRes(res, { error: `upload failed: ${err.message}` }, 500);
+  }
+}
+
+// ─────────── P0-4 Mac 录屏流程 ───────────
+async function handleMacScript({ project, projectId, logsDir, res, phase, script, cmd, args }) {
+  if (isPhaseRunning(projectId, phase)) {
+    return jsonRes(res, { error: `${phase} already running` }, 409);
+  }
+  const scriptPath = join(SKILL_SCRIPTS_PATH, script);
+  if (!existsSync(scriptPath)) {
+    return jsonRes(res, { error: `${script} not found` }, 500);
+  }
+  const send = startSSE({ req: null }, res);
+  try {
+    const { promise } = await runSkill({
+      projectId, phase, cmd, args: [scriptPath, ...args],
+      cwd: project.workspace_path, logsDir, createRunFn: createRun,
+      onSSE: (event, data) => send(event, data),
+    });
+    await promise;
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
+}
+
+async function handleMacProcess({ project, projectId, logsDir, res, movRel, trimStart, cropSpec }) {
+  if (isPhaseRunning(projectId, "mac-process")) {
+    return jsonRes(res, { error: "mac process already running" }, 409);
+  }
+  const scriptPath = join(SKILL_SCRIPTS_PATH, "process-mac-recording.sh");
+  if (!existsSync(scriptPath)) {
+    return jsonRes(res, { error: "process-mac-recording.sh not found" }, 500);
+  }
+  const movAbs = join(project.workspace_path, movRel);
+  if (!existsSync(movAbs)) {
+    return jsonRes(res, { error: `mov not found: ${movRel}` }, 400);
+  }
+  // 算下一个 final 版本号
+  const nextVer = nextVersionNumber(projectId, "final");
+  // process-mac-recording.sh 默认输出到 recordings-mac/final.mp4
+  // 我们 wrap 一下：跑完后把 final.mp4 重命名为 final-v{N}.mp4 并登记
+
+  const args = [scriptPath, movAbs, trimStart];
+  if (cropSpec) args.push(cropSpec);
+
+  const send = startSSE({ req: null }, res);
+  send("log", { level: "info", line: `▶ Mac process: mov=${movRel} trim=${trimStart}s crop=${cropSpec || "(auto)"}` });
+
+  try {
+    const { promise } = await runSkill({
+      projectId, phase: "mac-process", cmd: "bash", args,
+      cwd: project.workspace_path, logsDir, createRunFn: createRun,
+      onSSE: (event, data) => send(event, data),
+      onComplete: async ({ exitCode }) => {
+        if (exitCode === 0) {
+          // 把 recordings-mac/final.mp4 → final-v{N}.mp4 并登记
+          const src = join(project.workspace_path, "recordings-mac", "final.mp4");
+          if (existsSync(src)) {
+            const fs = await import("fs/promises");
+            const dstRel = `recordings-mac/final-v${nextVer}.mp4`;
+            const dstAbs = join(project.workspace_path, dstRel);
+            await fs.rename(src, dstAbs);
+            const size = statSync(dstAbs).size;
+            addVersion({
+              projectId, artifactType: "final", version: nextVer,
+              fileRelPath: dstRel,
+              metadataJson: JSON.stringify({ size, source: "process-mac-recording.sh", trim_start: trimStart, crop: cropSpec }),
+              setCurrent: true,
+            });
+            send("artifact_added", { type: "final", version: nextVer, path: dstRel, size });
+          }
+        }
+      },
+    });
+    await promise;
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
+}
+
+// ─────────── P0-5 发布：封面 + 多平台文案 ───────────
+async function handleGenCovers({ project, projectId, logsDir, res, body }) {
+  if (isPhaseRunning(projectId, "gen-covers")) {
+    return jsonRes(res, { error: "gen-covers already running" }, 409);
+  }
+  // gen-covers.py 不在 skill scripts，从同步过来的位置（已 cp 到 skill 目录）
+  const scriptPath = join(SKILL_SCRIPTS_PATH, "gen-covers.py");
+  if (!existsSync(scriptPath)) {
+    return jsonRes(res, { error: "gen-covers.py not found in skill" }, 500);
+  }
+  const send = startSSE({ req: null }, res);
+  try {
+    const { promise } = await runSkill({
+      projectId, phase: "gen-covers", cmd: "python3", args: [scriptPath],
+      cwd: project.workspace_path, logsDir, createRunFn: createRun,
+      onSSE: (event, data) => send(event, data),
+      onComplete: async ({ exitCode }) => {
+        if (exitCode === 0) {
+          // 扫 covers/ 下新生成的 cover-*.png 入库
+          const fs = await import("fs/promises");
+          const coversDir = join(project.workspace_path, "covers");
+          if (existsSync(coversDir)) {
+            const list = (await fs.readdir(coversDir)).filter(f => f.startsWith("cover-") && f.endsWith(".png")).sort();
+            let cv = 0;
+            for (const f of list) {
+              cv++;
+              const abs = join(coversDir, f);
+              const sz = statSync(abs).size;
+              addVersion({
+                projectId, artifactType: "cover", version: cv,
+                fileRelPath: `covers/${f}`,
+                metadataJson: JSON.stringify({ size: sz }),
+                setCurrent: cv === 1,
+              });
+            }
+            send("artifact_added", { type: "cover", count: list.length });
+          }
+        }
+      },
+    });
+    await promise;
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
+}
+
+async function handlePublishCopy({ project, projectId, res, body, streamClaude }) {
+  // 读 brief + script 拼 prompt
+  const fs = await import("fs/promises");
+  const briefPath = join(project.workspace_path, "brief.json");
+  const scriptMdPath = join(project.workspace_path, "script.md");
+  const outlineMdPath = join(project.workspace_path, "outline.md");
+
+  let brief = "{}", script = "", outline = "";
+  if (existsSync(briefPath))     brief    = await fs.readFile(briefPath, "utf8");
+  if (existsSync(scriptMdPath))  script   = await fs.readFile(scriptMdPath, "utf8");
+  if (existsSync(outlineMdPath)) outline  = await fs.readFile(outlineMdPath, "utf8");
+
+  const platforms = body.platforms || ["bilibili", "xiaohongshu", "douyin", "weixin-video", "youtube"];
+  const prompt = `你是视频发布助手。给定项目信息，为每个平台生成发布文案。
+
+### 项目 Brief
+\`\`\`json
+${brief}
+\`\`\`
+
+### 口播稿摘要
+${script.substring(0, 3000)}
+
+### 大纲
+${outline.substring(0, 2000)}
+
+### 任务
+为下面 ${platforms.length} 个平台分别输出文案：${platforms.join("、")}
+
+每个平台输出格式（用 markdown，平台之间用 \`---\` 分隔）：
+
+## bilibili
+**标题**：（≤ 60 字，含品牌词）
+**简介**：（≤ 250 字，含关键词 SEO）
+**标签**：tag1, tag2, tag3...（6-10 个）
+
+## xiaohongshu
+**标题**：（≤ 20 字，含 emoji，直接利益）
+**正文**：（含 hashtag）
+
+## douyin / weixin-video / youtube：同理按平台特性
+
+注意：
+- 标题不要太"AI 味"
+- 用第二人称
+- 钩子在前
+- xiaohongshu 多 emoji，bilibili 偏正式，douyin 钩子最强`;
+
+  const send = startSSE({ req: null }, res);
+  send("log", { level: "info", line: "▶ 调 Claude 生成多平台文案..." });
+
+  let fullText = "";
+  try {
+    await streamClaude({
+      prompt,
+      convId: `vf-publish-${projectId}`,
+      onEvent: (type, data) => {
+        if (type === "delta" && data?.text) {
+          fullText += data.text;
+          send("log", { level: "info", line: `+ ${data.text.substring(0, 200)}` });
+        } else if (type === "error") {
+          send("error", { message: data?.message || "claude error" });
+        }
+      },
+    });
+
+    // 写文件
+    const publishDir = join(project.workspace_path, "publish");
+    if (!existsSync(publishDir)) (await import("fs")).mkdirSync(publishDir, { recursive: true });
+    const outPath = join(publishDir, `copy.md`);
+    await fs.writeFile(outPath, fullText);
+    send("log", { level: "info", line: `✓ 写入 publish/copy.md (${fullText.length} 字)` });
+
+    // 登记版本
+    const ver = nextVersionNumber(projectId, "publish-copy");
+    addVersion({
+      projectId, artifactType: "publish-copy", version: ver,
+      fileRelPath: "publish/copy.md",
+      metadataJson: JSON.stringify({ size: fullText.length, platforms }),
+      setCurrent: true,
+    });
+    send("artifact_added", { type: "publish-copy", version: ver });
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
+}
+
+// ─────────── P0-2 Content 一键生成 ───────────
+async function handleContentGenerate({ project, projectId, res, streamClaude }) {
+  const fs = await import("fs/promises");
+  const briefPath = join(project.workspace_path, "brief.json");
+  if (!existsSync(briefPath)) {
+    return jsonRes(res, { error: "brief.json not found; fill Brief tab first" }, 400);
+  }
+  const brief = await fs.readFile(briefPath, "utf8");
+
+  const prompt = `你是 video-factory skill 的内容产出助手。
+
+### 项目 Brief
+\`\`\`json
+${brief}
+\`\`\`
+
+### 任务
+基于 brief，一次产出 4 个文件。输出严格按下面 4 段，**每段都要有清晰的开始/结束标记**（### FILE: <name>）：
+
+### FILE: article.md
+（保留 100% 信息密度的书面版原素材，~ 600-1500 字）
+
+### FILE: script.md
+（B 站风口播稿。短句 ≤ 20 字、第二人称、信息保留度 ≥ 60%、开头 3 秒钩子。按"节拍"切，每个节拍 ≤ 30 字。整篇按 brief 的 duration_target_s 估算，4 字/秒。）
+
+### FILE: outline.md
+（章节切分。5 章左右：钩子 / 核心定位 / 价值场景 / 上手 / 进阶 CTA。每章列出 step 数和信息池。）
+
+### FILE: audio-segments.json
+（JSON 数组，每个 step 一行。schema：[{"chapter":"hook","step":1,"text":"...","audio":"hook/1.mp3"}, ...]
+按 outline 的章节展开成 25-35 个 step，每个 text ≤ 30 字。chapter 用：hook / use-cases / examples / install / closing。）
+
+### TTS 改写规则（audio-segments.json 必须遵守）
+- 百分号 → "百分之 N"
+- 阿拉伯数字 → 汉字
+- "/init" → "斜杠 init"
+- 破折号"——" → 句号 + 短句
+- 单句 ≤ 25 字`;
+
+  const send = startSSE({ req: null }, res);
+  send("log", { level: "info", line: "▶ 调 Claude 生成 article / script / outline / audio-segments..." });
+
+  let fullText = "";
+  try {
+    await streamClaude({
+      prompt,
+      convId: `vf-content-${projectId}`,
+      onEvent: (type, data) => {
+        if (type === "delta" && data?.text) {
+          fullText += data.text;
+          if (data.text.length < 400) send("log", { level: "info", line: data.text.trim() });
+        } else if (type === "error") {
+          send("error", { message: data?.message || "claude error" });
+        }
+      },
+    });
+
+    // 解析 ### FILE: 块
+    const files = {};
+    const re = /^###\s+FILE:\s*([\w.-]+)\s*$/m;
+    let m;
+    const parts = fullText.split(/^###\s+FILE:\s*([\w.-]+)\s*$/m);
+    // 形式: [前文, fname1, content1, fname2, content2, ...]
+    for (let i = 1; i < parts.length; i += 2) {
+      files[parts[i].trim()] = parts[i + 1] ? parts[i + 1].trim() : "";
+    }
+
+    if (!Object.keys(files).length) {
+      send("error", { message: "Claude 输出没有可识别的 ### FILE: 块，请重试或手工调整 prompt" });
+      send("end", { ts: Date.now() }); return res.end();
+    }
+
+    const written = [];
+    for (const [fname, content] of Object.entries(files)) {
+      let body = content;
+      // audio-segments.json 提取 ```json ... ``` 代码块（如果有）
+      if (fname.endsWith(".json")) {
+        const cm = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (cm) body = cm[1].trim();
+      }
+      const dst = join(project.workspace_path, fname);
+      await fs.writeFile(dst, body);
+      const sz = statSync(dst).size;
+      send("log", { level: "info", line: `✓ ${fname} (${sz} bytes)` });
+
+      // 登记版本（不同类型分开）
+      const type = fname.replace(/\.\w+$/, "").replace(/-v\d+$/, "");
+      const ver = nextVersionNumber(projectId, type);
+      addVersion({
+        projectId, artifactType: type, version: ver,
+        fileRelPath: fname,
+        metadataJson: JSON.stringify({ size: sz, source: "claude-content-generate" }),
+        setCurrent: true,
+      });
+      written.push({ file: fname, version: ver });
+    }
+
+    send("artifact_added", { type: "content", written });
+    send("log", { level: "info", line: `✓ 全部完成 · 写入 ${written.length} 个文件` });
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
+}
+
+// ─────────── P0-3 视觉模板 scaffold ───────────
+async function handleScaffold({ project, projectId, body, res }) {
+  const fs = await import("fs/promises");
+  // 母板：opendaemon/data/video/claude-code-guide-v9-mac.html
+  // 替换 token: {{TITLE}} {{ACCENT}} 等
+  const templatePath = join(
+    "/root/workspace/projects/opendaemon/data/video",
+    "claude-code-guide-v9-mac.html"
+  );
+  if (!existsSync(templatePath)) {
+    return jsonRes(res, { error: "scaffold template not found" }, 500);
+  }
+  const template = await fs.readFile(templatePath, "utf8");
+
+  const title = body.title || project.title || "Untitled Video";
+  const accent = body.accent || "#D97757"; // 默认珊瑚橙
+  const mintAccent = body.mint || "#4ADE80";
+
+  // 简单 token 替换（不动 scenes / 动画结构，只换标题和主色）
+  let scaffolded = template
+    .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`)
+    .replace(/--coral:#D97757;/g, `--coral:${accent};`)
+    .replace(/--mint:#4ADE80;/g, `--mint:${mintAccent};`);
+
+  // 写到项目 public/index.html
+  const publicDir = join(project.workspace_path, "public");
+  if (!existsSync(publicDir)) (await import("fs")).mkdirSync(publicDir, { recursive: true });
+  const dst = join(publicDir, "index.html");
+  await fs.writeFile(dst, scaffolded);
+  const sz = statSync(dst).size;
+
+  // 登记版本
+  const ver = nextVersionNumber(projectId, "html");
+  addVersion({
+    projectId, artifactType: "html", version: ver,
+    fileRelPath: "public/index.html",
+    metadataJson: JSON.stringify({ size: sz, source: "scaffold-from-v9-mac", title, accent }),
+    setCurrent: true,
+  });
+
+  return jsonRes(res, {
+    ok: true,
+    file: "public/index.html",
+    version: ver,
+    size: sz,
+    preview_url: `/api/vf/projects/${projectId}/files/public/index.html`,
+    note: "已基于 v9-mac.html 套娃 · 改了 title 和主色 · scenes / audio 路径 / 动画都保留，需手工补对应项目的 mp3 才能跑",
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, m => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  })[m]);
 }
 
 async function handleRecording({ project, projectId, logsDir, res }) {
