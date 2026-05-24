@@ -447,24 +447,7 @@ async function renderProjectPage(id, tab) {
 function renderTabBody(tab, data) {
   const body = $('tab-body');
   if (tab === 'overview') {
-    body.innerHTML = `
-      <div class="card">
-        <h3>Manifest</h3>
-        <pre class="json">${syntaxJson(JSON.stringify(data.manifest || {}, null, 2))}</pre>
-      </div>
-      <div class="card">
-        <h3>最近运行</h3>
-        ${(data.runs || []).length
-          ? '<table style="width:100%;border-collapse:collapse;margin-top:8px"><thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Phase</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Status</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Time</th></tr></thead><tbody>' +
-            (data.runs || []).map(r => `<tr>
-              <td style="padding:6px 8px">${esc(r.phase)}</td>
-              <td style="padding:6px 8px">${esc(r.status)}</td>
-              <td style="padding:6px 8px;color:var(--ink-dim);font-size:12px">${r.started_at ? new Date(r.started_at).toLocaleString() : '-'}</td>
-            </tr>`).join('') + '</tbody></table>'
-          : '<p style="color:var(--ink-dim);margin-top:8px">还没运行过任何 phase</p>'
-        }
-      </div>
-    `;
+    renderOverview(body, data);
     return;
   }
   if (tab === 'brief') {
@@ -502,6 +485,177 @@ function renderTabBody(tab, data) {
       <p style="color:var(--ink-dim)">这个 tab 在 Iter 1 还没实现。当前 v0.1 重点：Project CRUD + Brief + API Keys。</p>
     </div>
   `;
+}
+
+/* ============================================================
+   Overview tab: Artifact 列表
+   ============================================================ */
+const ARTIFACT_CONFIG = {
+  // 顺序就是显示顺序
+  'final':           { label: '🎬 最终成片', preview: 'video', accent: 'coral' },
+  'cover':           { label: '🖼 封面候选', preview: 'image', accent: 'mint' },
+  'recording':       { label: '📹 录屏原片', preview: 'video', accent: 'coral-soft' },
+  'audio':           { label: '🎙 配音 (31 段)', preview: 'audio-dir', accent: 'coral' },
+  'script':          { label: '📝 口播稿', preview: 'text', accent: 'mint' },
+  'article':         { label: '📄 原文 article', preview: 'text', accent: 'ink-dim' },
+  'outline':         { label: '🗂 outline', preview: 'text', accent: 'ink-dim' },
+  'audio-segments':  { label: '🎚 audio-segments.json', preview: 'json', accent: 'ink-dim' },
+  'timing':          { label: '⏱ timing.json', preview: 'json', accent: 'ink-dim' },
+  'script-v6':       { label: '📝 script-v6', preview: 'text', accent: 'ink-dim' },
+};
+
+function renderOverview(body, data) {
+  const versions = data.versions || [];
+  // 按 type 分组
+  const byType = {};
+  for (const v of versions) {
+    if (!byType[v.artifact_type]) byType[v.artifact_type] = [];
+    byType[v.artifact_type].push(v);
+  }
+  // 排序：每个 type 按 version desc
+  for (const type in byType) {
+    byType[type].sort((a, b) => b.version - a.version);
+  }
+
+  // 按 ARTIFACT_CONFIG 顺序输出（未配置的 type 放最后）
+  const orderedTypes = [
+    ...Object.keys(ARTIFACT_CONFIG).filter(t => byType[t]),
+    ...Object.keys(byType).filter(t => !ARTIFACT_CONFIG[t]),
+  ];
+
+  let html = '';
+
+  // 制品卡片
+  for (const type of orderedTypes) {
+    html += renderArtifactCard(type, byType[type], data.project);
+  }
+
+  // 没制品时占位
+  if (orderedTypes.length === 0) {
+    html += `<div class="card"><p style="color:var(--ink-dim)">还没有任何制品。从 Brief tab 开始，逐步推进。</p></div>`;
+  }
+
+  // 最近运行
+  html += `
+    <div class="card">
+      <h3>最近运行</h3>
+      ${(data.runs || []).length
+        ? '<table style="width:100%;border-collapse:collapse;margin-top:8px"><thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Phase</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Status</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px">Time</th></tr></thead><tbody>' +
+          (data.runs || []).map(r => `<tr>
+            <td style="padding:6px 8px">${esc(r.phase)}</td>
+            <td style="padding:6px 8px">${esc(r.status)}</td>
+            <td style="padding:6px 8px;color:var(--ink-dim);font-size:12px">${r.started_at ? new Date(r.started_at).toLocaleString() : '-'}</td>
+          </tr>`).join('') + '</tbody></table>'
+        : '<p style="color:var(--ink-dim);margin-top:8px">还没运行过任何 phase</p>'
+      }
+    </div>
+
+    <details>
+      <summary style="cursor:pointer;color:var(--ink-dim);padding:8px 0">📋 manifest.json (点击展开)</summary>
+      <pre class="json" style="margin-top:8px">${syntaxJson(JSON.stringify(data.manifest || {}, null, 2))}</pre>
+    </details>
+  `;
+
+  body.innerHTML = html;
+}
+
+function renderArtifactCard(type, versions, project) {
+  const cfg = ARTIFACT_CONFIG[type] || { label: type, preview: 'none', accent: 'ink-dim' };
+  const current = versions.find(v => v.is_current);
+
+  let previewHtml = '';
+  if (current) {
+    const url = `/api/vf/projects/${project.id}/files/${encodeURI(current.file_rel_path)}`;
+    if (cfg.preview === 'video') {
+      previewHtml = `
+        <video controls preload="metadata" style="width:100%;max-height:420px;border-radius:8px;background:#000;margin-bottom:12px">
+          <source src="${url}" type="video/mp4">
+        </video>
+      `;
+    } else if (cfg.preview === 'image') {
+      // 显示所有 cover 缩略图
+      previewHtml = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px">
+          ${versions.filter(v => !v.is_trashed).map(v => {
+            const u = `/api/vf/projects/${project.id}/files/${encodeURI(v.file_rel_path)}`;
+            const isCurrent = v.is_current;
+            return `<a href="${u}" target="_blank" style="display:block;position:relative">
+              <img src="${u}" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;border:2px solid ${isCurrent ? 'var(--coral)' : 'var(--line)'}" loading="lazy">
+              <div style="position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,.7);color:#fff;padding:1px 6px;border-radius:4px;font-size:11px">v${v.version}${isCurrent ? ' ★' : ''}</div>
+            </a>`;
+          }).join('')}
+        </div>
+      `;
+    } else if (cfg.preview === 'audio-dir') {
+      const meta = current.metadata_json ? JSON.parse(current.metadata_json) : {};
+      const files = meta.files || [];
+      previewHtml = `
+        <details style="margin-bottom:10px">
+          <summary style="cursor:pointer;color:var(--ink-dim);font-size:12px">${files.length} 段 mp3 (点击展开)</summary>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;margin-top:8px">
+            ${files.slice(0, 31).map(f => {
+              const u = `/api/vf/projects/${project.id}/files/${encodeURI(f)}`;
+              return `<div style="background:rgba(255,255,255,.03);padding:6px 8px;border-radius:6px;font-size:12px">
+                <div style="color:var(--ink-dim);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.replace('public/audio/', ''))}</div>
+                <audio controls preload="none" src="${u}" style="width:100%;height:30px"></audio>
+              </div>`;
+            }).join('')}
+          </div>
+        </details>
+      `;
+    }
+  }
+
+  // 版本表格
+  const versionRows = versions.filter(v => !v.is_trashed).map(v => {
+    const meta = v.metadata_json ? safeParse(v.metadata_json) : {};
+    const url = `/api/vf/projects/${project.id}/files/${encodeURI(v.file_rel_path)}`;
+    const dlUrl = `${url}${url.includes('?') ? '&' : '?'}download=1`;
+    const sizeStr = meta.size ? formatSize(meta.size) : (meta.count ? `${meta.count} 个文件` : '-');
+    return `<tr>
+      <td style="padding:8px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace">v${v.version}${v.is_current ? ' <span class="pill content" style="margin-left:6px">★ current</span>' : ''}</td>
+      <td style="padding:8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-dim);word-break:break-all">${esc(v.file_rel_path)}</td>
+      <td style="padding:8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-dim);white-space:nowrap">${sizeStr}</td>
+      <td style="padding:8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap">
+        <a href="${url}" target="_blank" class="btn secondary" style="width:auto;padding:4px 10px;font-size:12px;display:inline-block;text-decoration:none;margin-right:4px">预览</a>
+        <a href="${dlUrl}" download class="btn secondary" style="width:auto;padding:4px 10px;font-size:12px;display:inline-block;text-decoration:none;margin-right:4px">下载</a>
+        ${!v.is_current ? `<button class="btn" style="width:auto;padding:4px 10px;font-size:12px" onclick="switchCurrent('${project.id}','${esc(type)}',${v.version})">设为 current</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <h3>${cfg.label} <span style="color:var(--ink-dim);font-size:12px;font-weight:400;margin-left:6px">${versions.filter(v=>!v.is_trashed).length} 个版本</span></h3>
+      ${previewHtml}
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px;font-weight:500">版本</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px;font-weight:500">路径</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px;font-weight:500">大小</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${versionRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function switchCurrent(projectId, type, version) {
+  try {
+    await api(`/api/vf/projects/${projectId}/versions/${type}/${version}/switch`, { method: 'POST' });
+    toast(`${type} → v${version} (current)`, 'success');
+    render();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+function safeParse(s) { try { return JSON.parse(s); } catch { return {}; } }
+function formatSize(bytes) {
+  if (!bytes) return '-';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + ' MB';
+  return (bytes/1024/1024/1024).toFixed(2) + ' GB';
 }
 
 async function saveBrief() {

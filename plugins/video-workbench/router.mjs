@@ -13,7 +13,9 @@ import {
   createRun, getRun, listRuns, updateRun,
   saveApiKey, getApiKey, listApiKeys, deleteApiKey,
   addVersion, listVersions, setCurrentVersion, nextVersionNumber,
+  findVersionByPath, trashVersion,
 } from "./db.mjs";
+import { createReadStream } from "fs";
 import { encryptKey, decryptKey } from "./keys.mjs";
 import { bootstrapProjectDir, readManifest, writeManifest, setPhase } from "./manifest.mjs";
 import { runSkill, killRunTree, isPhaseRunning } from "./skill-runner.mjs";
@@ -266,7 +268,136 @@ async function handleProjectRoute({ projectId, sub, method, req, res, projectsRo
     return jsonRes(res, { runs: listRuns(projectId, { limit: 50 }) });
   }
 
+  // GET /api/vf/projects/:id/versions[?type=final]
+  if (sub === "versions" && method === "GET") {
+    const url = new URL(req.url, "http://localhost");
+    const type = url.searchParams.get("type");
+    return jsonRes(res, { versions: listVersions(projectId, type) });
+  }
+
+  // POST /api/vf/projects/:id/versions/:type/:version/switch
+  // POST /api/vf/projects/:id/versions/:type/:version/trash
+  // GET  /api/vf/projects/:id/files/<rel...>
+  if (sub?.startsWith("versions/")) {
+    return await handleVersionAction({ project, projectId, sub, method, res });
+  }
+  if (sub?.startsWith("files/")) {
+    const rel = sub.substring("files/".length);
+    return await serveProjectFile({ project, rel, method, req, res });
+  }
+
   return jsonRes(res, { error: `unknown route: /api/vf/projects/${projectId}/${sub}` }, 404);
+}
+
+async function handleVersionAction({ project, projectId, sub, method, res }) {
+  // sub 格式: versions/<type>/<version>/<action>
+  const parts = sub.split("/");
+  if (parts.length < 4) return jsonRes(res, { error: "invalid version path" }, 400);
+  const [, type, verStr, action] = parts;
+  const version = parseInt(verStr, 10);
+  if (isNaN(version)) return jsonRes(res, { error: "invalid version number" }, 400);
+
+  if (action === "switch" && method === "POST") {
+    setCurrentVersion(projectId, type, version);
+    return jsonRes(res, { ok: true, type, version });
+  }
+  if (action === "trash" && method === "POST") {
+    trashVersion(projectId, type, version);
+    return jsonRes(res, { ok: true, type, version });
+  }
+  return jsonRes(res, { error: `unknown version action: ${action}` }, 404);
+}
+
+async function serveProjectFile({ project, rel, method, req, res }) {
+  if (method !== "GET") return jsonRes(res, { error: "method not allowed" }, 405);
+  if (!rel || rel.includes("..")) return jsonRes(res, { error: "invalid path" }, 403);
+
+  rel = decodeURIComponent(rel);
+
+  // 安全：只允许 versions 表里登记过的路径
+  const reg = findVersionByPath(project.id, rel);
+  if (!reg) {
+    return jsonRes(res, { error: "file not registered in versions table" }, 404);
+  }
+
+  // 解析真实路径：__daemon_data__ 前缀指向 daemon data/ 目录
+  let absPath;
+  if (rel.startsWith("__daemon_data__/")) {
+    const daemonData = join(import.meta.url.includes("file://")
+      ? new URL("../../data/", import.meta.url).pathname
+      : "/root/workspace/projects/opendaemon/data/",
+      rel.substring("__daemon_data__/".length));
+    absPath = daemonData;
+  } else {
+    absPath = join(project.workspace_path, rel);
+  }
+
+  // 兜底：解析后路径必须在合法根目录内
+  const ok = absPath.startsWith(project.workspace_path) ||
+             absPath.startsWith("/root/workspace/projects/opendaemon/data/");
+  if (!ok) return jsonRes(res, { error: "path escape" }, 403);
+
+  if (!existsSync(absPath)) {
+    return jsonRes(res, { error: `file not found: ${absPath}` }, 404);
+  }
+
+  const stat = statSync(absPath);
+  if (!stat.isFile()) return jsonRes(res, { error: "not a file" }, 404);
+
+  // MIME by ext
+  const ext = absPath.substring(absPath.lastIndexOf(".")).toLowerCase();
+  const MIME = {
+    ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg", ".m4a": "audio/mp4",
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".webp": "image/webp", ".svg": "image/svg+xml",
+    ".json": "application/json; charset=utf-8",
+    ".md": "text/markdown; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
+  };
+  const contentType = MIME[ext] || "application/octet-stream";
+
+  // ?download=1 强制下载
+  const url = new URL(req.url, "http://localhost");
+  const forceDownload = url.searchParams.get("download") === "1";
+  const fileName = rel.split("/").pop();
+  const previewable = [".png",".jpg",".jpeg",".webp",".svg",".mp4",".webm",".mp3",".json",".md",".txt"].includes(ext);
+  const disposition = (previewable && !forceDownload)
+    ? `inline; filename="${fileName}"`
+    : `attachment; filename="${fileName}"`;
+
+  // Range support for video/audio streaming
+  const range = req.headers.range;
+  const fileSize = stat.size;
+  if (range && previewable && !forceDownload && /^bytes=/.test(range)) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (m) {
+      let start = m[1] ? parseInt(m[1], 10) : 0;
+      let end = m[2] ? parseInt(m[2], 10) : fileSize - 1;
+      if (isNaN(start)) start = 0;
+      if (isNaN(end) || end >= fileSize) end = fileSize - 1;
+      if (start > end || start >= fileSize) {
+        res.writeHead(416, { "Content-Range": `bytes */${fileSize}` });
+        return res.end();
+      }
+      res.writeHead(206, {
+        "Content-Type": contentType,
+        "Content-Disposition": disposition,
+        "Content-Length": end - start + 1,
+        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+        "Accept-Ranges": "bytes",
+      });
+      return createReadStream(absPath, { start, end }).pipe(res);
+    }
+  }
+
+  res.writeHead(200, {
+    "Content-Type": contentType,
+    "Content-Disposition": disposition,
+    "Content-Length": fileSize,
+    "Accept-Ranges": "bytes",
+  });
+  return createReadStream(absPath).pipe(res);
 }
 
 async function handleAudioSynth({ project, body, projectId, logsDir, daemonAuthSecret, res }) {

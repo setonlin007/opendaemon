@@ -245,3 +245,16 @@ export function setCurrentVersion(projectId, artifactType, version) {
     "UPDATE vf_versions SET is_current = 1 WHERE project_id = ? AND artifact_type = ? AND version = ?"
   ).run(projectId, artifactType, version);
 }
+
+export function findVersionByPath(projectId, fileRelPath) {
+  // 用于文件服务的安全校验：必须是这个项目登记过的路径
+  return getDb().prepare(
+    "SELECT * FROM vf_versions WHERE project_id = ? AND file_rel_path = ? LIMIT 1"
+  ).get(projectId, fileRelPath);
+}
+
+export function trashVersion(projectId, artifactType, version) {
+  getDb().prepare(
+    "UPDATE vf_versions SET is_trashed = 1, is_current = 0 WHERE project_id = ? AND artifact_type = ? AND version = ?"
+  ).run(projectId, artifactType, version);
+}
