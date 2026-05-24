@@ -561,37 +561,33 @@ function renderOverview(body, data) {
 
 function renderArtifactCard(type, versions, project) {
   const cfg = ARTIFACT_CONFIG[type] || { label: type, preview: 'none', accent: 'ink-dim' };
-  const current = versions.find(v => v.is_current);
+  const live = versions.filter(v => !v.is_trashed);
+  const current = live.find(v => v.is_current) || live[0];
+  const older = live.filter(v => v !== current);
 
+  // ── Current 大预览 ──
   let previewHtml = '';
   if (current) {
     const url = `/api/vf/projects/${project.id}/files/${encodeURI(current.file_rel_path)}`;
     if (cfg.preview === 'video') {
       previewHtml = `
-        <video controls preload="metadata" style="width:100%;max-height:420px;border-radius:8px;background:#000;margin-bottom:12px">
+        <video controls preload="metadata" style="width:100%;max-height:420px;border-radius:8px;background:#000;margin-bottom:8px">
           <source src="${url}" type="video/mp4">
         </video>
       `;
     } else if (cfg.preview === 'image') {
-      // 显示所有 cover 缩略图
+      // Current 大图
       previewHtml = `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px">
-          ${versions.filter(v => !v.is_trashed).map(v => {
-            const u = `/api/vf/projects/${project.id}/files/${encodeURI(v.file_rel_path)}`;
-            const isCurrent = v.is_current;
-            return `<a href="${u}" target="_blank" style="display:block;position:relative">
-              <img src="${u}" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;border:2px solid ${isCurrent ? 'var(--coral)' : 'var(--line)'}" loading="lazy">
-              <div style="position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,.7);color:#fff;padding:1px 6px;border-radius:4px;font-size:11px">v${v.version}${isCurrent ? ' ★' : ''}</div>
-            </a>`;
-          }).join('')}
-        </div>
+        <a href="${url}" target="_blank" style="display:block;margin-bottom:8px">
+          <img src="${url}" style="max-width:280px;width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:8px;border:2px solid var(--coral)" loading="lazy">
+        </a>
       `;
     } else if (cfg.preview === 'audio-dir') {
-      const meta = current.metadata_json ? JSON.parse(current.metadata_json) : {};
+      const meta = current.metadata_json ? safeParse(current.metadata_json) : {};
       const files = meta.files || [];
       previewHtml = `
-        <details style="margin-bottom:10px">
-          <summary style="cursor:pointer;color:var(--ink-dim);font-size:12px">${files.length} 段 mp3 (点击展开)</summary>
+        <details style="margin-bottom:8px">
+          <summary style="cursor:pointer;color:var(--ink-dim);font-size:12px">▸ ${files.length} 段 mp3 (展开试听)</summary>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;margin-top:8px">
             ${files.slice(0, 31).map(f => {
               const u = `/api/vf/projects/${project.id}/files/${encodeURI(f)}`;
@@ -606,39 +602,71 @@ function renderArtifactCard(type, versions, project) {
     }
   }
 
-  // 版本表格
-  const versionRows = versions.filter(v => !v.is_trashed).map(v => {
-    const meta = v.metadata_json ? safeParse(v.metadata_json) : {};
-    const url = `/api/vf/projects/${project.id}/files/${encodeURI(v.file_rel_path)}`;
-    const dlUrl = `${url}${url.includes('?') ? '&' : '?'}download=1`;
-    const sizeStr = meta.size ? formatSize(meta.size) : (meta.count ? `${meta.count} 个文件` : '-');
-    return `<tr>
-      <td style="padding:8px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace">v${v.version}${v.is_current ? ' <span class="pill content" style="margin-left:6px">★ current</span>' : ''}</td>
-      <td style="padding:8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-dim);word-break:break-all">${esc(v.file_rel_path)}</td>
-      <td style="padding:8px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-dim);white-space:nowrap">${sizeStr}</td>
-      <td style="padding:8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap">
-        <a href="${url}" target="_blank" class="btn secondary" style="width:auto;padding:4px 10px;font-size:12px;display:inline-block;text-decoration:none;margin-right:4px">预览</a>
-        <a href="${dlUrl}" download class="btn secondary" style="width:auto;padding:4px 10px;font-size:12px;display:inline-block;text-decoration:none;margin-right:4px">下载</a>
-        ${!v.is_current ? `<button class="btn" style="width:auto;padding:4px 10px;font-size:12px" onclick="switchCurrent('${project.id}','${esc(type)}',${v.version})">设为 current</button>` : ''}
-      </td>
-    </tr>`;
-  }).join('');
+  // ── Current 的版本行（始终显示） ──
+  const currentRow = current ? renderVersionRow(current, type, project, true) : '';
+
+  // ── 旧版本行（默认折叠） ──
+  const olderRows = older.map(v => renderVersionRow(v, type, project, false)).join('');
+
+  const olderSection = older.length ? `
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;color:var(--ink-dim);font-size:12px;padding:6px 0;user-select:none">
+        ▸ 其他 ${older.length} 个旧版本
+      </summary>
+      <table style="width:100%;border-collapse:collapse;margin-top:6px">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:11px;font-weight:500">版本</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:11px;font-weight:500">路径</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:11px;font-weight:500">大小</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${olderRows}</tbody>
+      </table>
+    </details>
+  ` : '';
+
+  // ── 当前版本紧凑信息条 ──
+  const currentMeta = current ? safeParse(current.metadata_json || "{}") : {};
+  const sizeStr = currentMeta.size ? formatSize(currentMeta.size)
+                : currentMeta.count ? `${currentMeta.count} 个文件`
+                : '-';
+  const currentBar = current ? `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;background:rgba(217,119,87,.06);border:1px solid rgba(217,119,87,.25);border-radius:8px;font-size:13px">
+      <span class="pill content">★ current · v${current.version}</span>
+      <span style="color:var(--ink-dim);font-size:12px;flex:1;min-width:200px;word-break:break-all">${esc(current.file_rel_path)}</span>
+      <span style="color:var(--ink-dim);font-size:12px;white-space:nowrap">${sizeStr}</span>
+      <span style="display:inline-flex;gap:4px">
+        <a href="/api/vf/projects/${project.id}/files/${encodeURI(current.file_rel_path)}" target="_blank" class="btn secondary" style="width:auto;padding:4px 10px;font-size:12px;text-decoration:none">预览</a>
+        <a href="/api/vf/projects/${project.id}/files/${encodeURI(current.file_rel_path)}?download=1" download class="btn secondary" style="width:auto;padding:4px 10px;font-size:12px;text-decoration:none">下载</a>
+      </span>
+    </div>
+  ` : '';
 
   return `
     <div class="card">
-      <h3>${cfg.label} <span style="color:var(--ink-dim);font-size:12px;font-weight:400;margin-left:6px">${versions.filter(v=>!v.is_trashed).length} 个版本</span></h3>
+      <h3>${cfg.label} <span style="color:var(--ink-dim);font-size:12px;font-weight:400;margin-left:6px">${live.length} 个版本</span></h3>
       ${previewHtml}
-      <table style="width:100%;border-collapse:collapse;margin-top:8px">
-        <thead><tr>
-          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px;font-weight:500">版本</th>
-          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px;font-weight:500">路径</th>
-          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);color:var(--ink-dim);font-size:12px;font-weight:500">大小</th>
-          <th></th>
-        </tr></thead>
-        <tbody>${versionRows}</tbody>
-      </table>
+      ${currentBar}
+      ${olderSection}
     </div>
   `;
+}
+
+function renderVersionRow(v, type, project, isCurrent) {
+  const meta = safeParse(v.metadata_json || "{}");
+  const url = `/api/vf/projects/${project.id}/files/${encodeURI(v.file_rel_path)}`;
+  const dlUrl = `${url}${url.includes('?') ? '&' : '?'}download=1`;
+  const sizeStr = meta.size ? formatSize(meta.size) : (meta.count ? `${meta.count} 个文件` : '-');
+  return `<tr>
+    <td style="padding:6px 8px;border-bottom:1px solid var(--line);font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap">v${v.version}${isCurrent ? ' <span class="pill content" style="margin-left:4px">★</span>' : ''}</td>
+    <td style="padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;color:var(--ink-dim);word-break:break-all">${esc(v.file_rel_path)}</td>
+    <td style="padding:6px 8px;border-bottom:1px solid var(--line);font-size:11px;color:var(--ink-dim);white-space:nowrap">${sizeStr}</td>
+    <td style="padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap">
+      <a href="${url}" target="_blank" class="btn secondary" style="width:auto;padding:3px 8px;font-size:11px;display:inline-block;text-decoration:none;margin-right:3px">预览</a>
+      <a href="${dlUrl}" download class="btn secondary" style="width:auto;padding:3px 8px;font-size:11px;display:inline-block;text-decoration:none;margin-right:3px">下载</a>
+      ${!isCurrent ? `<button class="btn" style="width:auto;padding:3px 8px;font-size:11px" onclick="switchCurrent('${project.id}','${esc(type)}',${v.version})">设 current</button>` : ''}
+    </td>
+  </tr>`;
 }
 
 async function switchCurrent(projectId, type, version) {
