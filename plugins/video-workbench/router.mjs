@@ -18,7 +18,7 @@ import {
 import { createReadStream } from "fs";
 import { encryptKey, decryptKey } from "./keys.mjs";
 import { bootstrapProjectDir, readManifest, writeManifest, setPhase } from "./manifest.mjs";
-import { runSkill, killRunTree, isPhaseRunning } from "./skill-runner.mjs";
+import { runSkill, killRunTree, isPhaseRunning, getActiveRunId } from "./skill-runner.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -98,6 +98,15 @@ export function createRouter({ daemonAuthSecret, projectsRoot, logsDir }) {
         // ─── /api/vf/health ───
         if (path === "/api/vf/health") {
           return jsonRes(res, { ok: true, projects: listProjects().length });
+        }
+
+        // ─── /api/vf/active-runs (Status Tray 轮询) ───
+        if (path === "/api/vf/active-runs") {
+          const { getDb } = await import("./db.mjs");
+          const rows = getDb().prepare(
+            "SELECT r.id, r.project_id, r.phase, r.started_at, p.slug, p.title FROM vf_pipeline_runs r JOIN vf_projects p ON p.id = r.project_id WHERE r.status = 'running' ORDER BY r.started_at DESC"
+          ).all();
+          return jsonRes(res, { runs: rows });
         }
 
         // ─── 项目 CRUD ───
@@ -251,6 +260,22 @@ async function handleProjectRoute({ projectId, sub, method, req, res, projectsRo
   if (sub === "audio" && method === "POST") {
     const body = await readJsonBody(req);
     return await handleAudioSynth({ project, body, projectId, logsDir, daemonAuthSecret, res });
+  }
+
+  // POST /api/vf/projects/:id/recording/playwright  (SSE)
+  if (sub === "recording/playwright" && method === "POST") {
+    return await handleRecording({ project, projectId, logsDir, res });
+  }
+
+  // POST /api/vf/projects/:id/encode  (SSE)
+  if (sub === "encode" && method === "POST") {
+    const body = await readJsonBody(req);
+    return await handleEncode({ project, projectId, body, logsDir, res });
+  }
+
+  // POST /api/vf/projects/:id/build-timing  (SSE) · 跑完音频要 build-timing.py 才能录
+  if (sub === "build-timing" && method === "POST") {
+    return await handleBuildTiming({ project, projectId, logsDir, res });
   }
 
   // POST /api/vf/projects/:id/lint  (SSE)
@@ -447,6 +472,115 @@ async function handleAudioSynth({ project, body, projectId, logsDir, daemonAuthS
       args,
       cwd: project.workspace_path,
       env: envKey,
+      logsDir,
+      createRunFn: createRun,
+      onSSE: (event, data) => send(event, data),
+    });
+    await promise;
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
+}
+
+async function handleRecording({ project, projectId, logsDir, res }) {
+  if (isPhaseRunning(projectId, "recording")) {
+    return jsonRes(res, { error: "recording already running", active_run: getActiveRunId(projectId, "recording") }, 409);
+  }
+  const scriptPath = join(SKILL_SCRIPTS_PATH, "record-video-paged.py");
+  if (!existsSync(scriptPath)) {
+    return jsonRes(res, { error: `record-video-paged.py not found at ${scriptPath}` }, 500);
+  }
+  const send = startSSE({ req: null }, res);
+  send("log", { level: "info", line: `▶ 启动 Playwright 录制（30-40 min）...` });
+  try {
+    const { promise } = await runSkill({
+      projectId, phase: "recording", cmd: "python3", args: [scriptPath],
+      cwd: project.workspace_path,
+      logsDir,
+      createRunFn: createRun,
+      onSSE: (event, data) => send(event, data),
+    });
+    await promise;
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
+}
+
+async function handleEncode({ project, projectId, body, logsDir, res }) {
+  if (isPhaseRunning(projectId, "encode")) {
+    return jsonRes(res, { error: "encode already running" }, 409);
+  }
+  const scriptPath = join(SKILL_SCRIPTS_PATH, "encode-mp4.sh");
+  if (!existsSync(scriptPath)) {
+    return jsonRes(res, { error: `encode-mp4.sh not found` }, 500);
+  }
+
+  // 默认输入 = recordings-paged/*.webm 拼接成片
+  const inputRel = body.input || "recordings-paged/claude-code-guide-paged.webm";
+  // 输出文件命名：final-v{next}.mp4
+  const nextVer = nextVersionNumber(projectId, "final");
+  const outputRel = body.output || `final-v${nextVer}.mp4`;
+
+  const inputAbs = join(project.workspace_path, inputRel);
+  if (!existsSync(inputAbs)) {
+    return jsonRes(res, { error: `input not found: ${inputAbs}` }, 400);
+  }
+
+  const send = startSSE({ req: null }, res);
+  send("log", { level: "info", line: `▶ 编码 ${inputRel} → ${outputRel} (libx264 medium CRF 20)` });
+
+  try {
+    const { promise } = await runSkill({
+      projectId, phase: "encode", cmd: "bash",
+      args: [scriptPath, inputRel, outputRel],
+      cwd: project.workspace_path,
+      logsDir,
+      createRunFn: createRun,
+      onSSE: (event, data) => send(event, data),
+      onComplete: ({ exitCode }) => {
+        if (exitCode === 0) {
+          // 编码成功 → 自动登记新版本
+          const outputAbs = join(project.workspace_path, outputRel);
+          if (existsSync(outputAbs)) {
+            const size = statSync(outputAbs).size;
+            addVersion({
+              projectId,
+              artifactType: "final",
+              version: nextVer,
+              fileRelPath: outputRel,
+              metadataJson: JSON.stringify({ size, source: "encode-mp4.sh" }),
+              setCurrent: true,
+            });
+            send("artifact_added", { type: "final", version: nextVer, path: outputRel, size });
+          }
+        }
+      },
+    });
+    await promise;
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
+}
+
+async function handleBuildTiming({ project, projectId, logsDir, res }) {
+  if (isPhaseRunning(projectId, "build-timing")) {
+    return jsonRes(res, { error: "build-timing already running" }, 409);
+  }
+  const scriptPath = join(SKILL_SCRIPTS_PATH, "build-timing.py");
+  if (!existsSync(scriptPath)) {
+    return jsonRes(res, { error: `build-timing.py not found` }, 500);
+  }
+  const send = startSSE({ req: null }, res);
+  try {
+    const { promise } = await runSkill({
+      projectId, phase: "build-timing", cmd: "python3", args: [scriptPath],
+      cwd: project.workspace_path,
       logsDir,
       createRunFn: createRun,
       onSSE: (event, data) => send(event, data),
