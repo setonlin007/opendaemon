@@ -267,6 +267,12 @@ async function handleProjectRoute({ projectId, sub, method, req, res, projectsRo
     return await handleRecording({ project, projectId, logsDir, res });
   }
 
+  // POST /api/vf/projects/:id/recording/screenshot  (SSE · 高画质 pipe)
+  if (sub === "recording/screenshot" && method === "POST") {
+    const body = await readJsonBody(req);
+    return await handleRecordingScreenshot({ project, projectId, logsDir, res, body });
+  }
+
   // POST /api/vf/projects/:id/encode  (SSE)
   if (sub === "encode" && method === "POST") {
     const body = await readJsonBody(req);
@@ -945,6 +951,54 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, m => ({
     "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
   })[m]);
+}
+
+async function handleRecordingScreenshot({ project, projectId, logsDir, res, body }) {
+  if (isPhaseRunning(projectId, "recording")) {
+    return jsonRes(res, { error: "recording already running" }, 409);
+  }
+  const scriptPath = join(SKILL_SCRIPTS_PATH, "record-video-screenshot.py");
+  if (!existsSync(scriptPath)) {
+    return jsonRes(res, { error: "record-video-screenshot.py not found" }, 500);
+  }
+  const fps = String(body.fps ?? 20);
+  const quality = String(body.quality ?? 92);
+  const args = [scriptPath, "--fps", fps, "--quality", quality];
+  if (body.only) args.push("--only", String(body.only));
+
+  const send = startSSE({ req: null }, res);
+  send("log", { level: "info", line: `▶ screenshot-pipe 录制 · fps=${fps} · jpeg q=${quality}（高画质，耗时较 paged 多 ~50%）` });
+  try {
+    const { promise } = await runSkill({
+      projectId, phase: "recording", cmd: "python3", args,
+      cwd: project.workspace_path,
+      logsDir,
+      createRunFn: createRun,
+      onSSE: (event, data) => send(event, data),
+      onComplete: ({ exitCode }) => {
+        if (exitCode === 0) {
+          // 成片落在 recordings-paged/screenshot-final.mp4
+          const final = join(project.workspace_path, "recordings-paged", "screenshot-final.mp4");
+          if (existsSync(final)) {
+            const ver = nextVersionNumber(projectId, "recording");
+            const size = statSync(final).size;
+            addVersion({
+              projectId, artifactType: "recording", version: ver,
+              fileRelPath: "recordings-paged/screenshot-final.mp4",
+              metadataJson: JSON.stringify({ size, source: "screenshot-pipe", fps, quality }),
+              setCurrent: true,
+            });
+            send("artifact_added", { type: "recording", version: ver, path: "recordings-paged/screenshot-final.mp4", size });
+          }
+        }
+      },
+    });
+    await promise;
+  } catch (err) {
+    send("error", { message: err.message });
+  }
+  send("end", { ts: Date.now() });
+  res.end();
 }
 
 async function handleRecording({ project, projectId, logsDir, res }) {

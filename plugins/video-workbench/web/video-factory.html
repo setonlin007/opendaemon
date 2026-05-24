@@ -727,14 +727,50 @@ async function renderRecordingTab(body, data) {
 
   body.innerHTML = `
     <div class="card">
-      <h3>Playwright 自动录制（headless）</h3>
+      <h3>① 准备 timing.json</h3>
+      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:10px">把 31 段 mp3 时长扫一遍生成 timing.json，定每段视觉时长。</p>
       ${!hasAudio ? `<p style="color:var(--red);font-size:13px;margin-bottom:10px">⚠ 还没合音频，先去 Audio tab</p>` : ''}
-      ${!hasTiming ? `<p style="color:var(--coral-soft);font-size:13px;margin-bottom:10px">⚠ 缺 timing.json，先跑 build-timing</p>` : ''}
-      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:12px">用 chromium headless 逐页录制（25fps · 1Mbps VP8）。10 分钟左右。画质要求高建议走 Mac 路径。</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn secondary" onclick="startBuildTiming('${projectId}')">① 生成 timing.json</button>
-        <button class="btn" ${(!hasAudio || !hasTiming) ? 'disabled' : ''} onclick="startRecording('${projectId}')">② ▶ 开始录制</button>
+      <button class="btn secondary" ${!hasAudio ? 'disabled' : ''} onclick="startBuildTiming('${projectId}')">▶ build-timing.py</button>
+    </div>
+
+    <div class="card" style="display:none" id="run-panel"></div>
+
+    <div class="card">
+      <h3>② 录制方案 A · Playwright VP8（快但糊）</h3>
+      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:12px">
+        VP8 1 Mbps realtime 编码。<br/>
+        ⏱ <b>10 min</b> · 📦 ~50MB · 🖼 画质：<b style="color:var(--red)">糊</b>（适合快速迭代验证视觉时序）
+      </p>
+      <button class="btn secondary" ${(!hasAudio || !hasTiming) ? 'disabled' : ''} onclick="startRecording('${projectId}')">▶ 开始 Playwright 录制</button>
+    </div>
+
+    <div class="card">
+      <h3>③ 录制方案 B · Screenshot Pipe（慢但清晰）⭐</h3>
+      <p style="color:var(--ink-dim);font-size:13px;margin-bottom:12px">
+        逐帧 page.screenshot() → pipe 给 ffmpeg → libx264 CRF 18 编码。<br/>
+        ⏱ <b>15-20 min</b> · 📦 ~100MB · 🖼 画质：<b style="color:var(--mint)">明显比方案 A 清晰</b>（CRF 18 视觉准无损）<br/>
+        💻 资源：内存 ~1.5GB · 磁盘临时 ~0（pipe 不落盘）
+      </p>
+      <div class="row">
+        <div class="form-row">
+          <label>帧率 fps</label>
+          <select id="ss-fps">
+            <option value="15">15 fps · 最省资源</option>
+            <option value="20" selected>20 fps · 推荐 ⭐</option>
+            <option value="25">25 fps · 较顺滑</option>
+            <option value="30">30 fps · 可能跟不上</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>JPEG 质量</label>
+          <select id="ss-quality">
+            <option value="85">85 · 略小</option>
+            <option value="92" selected>92 · 推荐 ⭐</option>
+            <option value="95">95 · 略大</option>
+          </select>
+        </div>
       </div>
+      <button class="btn" ${(!hasAudio || !hasTiming) ? 'disabled' : ''} onclick="startRecordingScreenshot('${projectId}')">▶ 开始 Screenshot 录制（高画质）</button>
     </div>
 
     <div class="card" style="display:none" id="run-panel"></div>
@@ -848,8 +884,20 @@ function startBuildTiming(projectId) {
 }
 
 function startRecording(projectId) {
-  if (!confirm('Playwright 录制约 10 分钟，期间不要操作 daemon。继续？')) return;
+  if (!confirm('Playwright VP8 录制约 10 分钟，画质糊但快。继续？')) return;
   runPhase({ projectId, url: `/api/vf/projects/${projectId}/recording/playwright`, panelEl: $('run-panel') });
+}
+
+function startRecordingScreenshot(projectId) {
+  const fps = $('ss-fps').value;
+  const quality = $('ss-quality').value;
+  if (!confirm(`Screenshot 高画质录制约 15-20 分钟（fps=${fps} · q=${quality}），中途不要重启 daemon。继续？`)) return;
+  runPhase({
+    projectId,
+    url: `/api/vf/projects/${projectId}/recording/screenshot`,
+    params: { fps: parseInt(fps), quality: parseInt(quality) },
+    panelEl: $('run-panel'),
+  });
 }
 
 /* ============================================================
