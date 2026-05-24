@@ -2,6 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0B0E14">
 <title>Video Workbench · OpenDaemon</title>
 <style>
 :root{
@@ -15,13 +18,33 @@
   --red:#F87171;
   --line:rgba(255,255,255,.08);
 }
-*{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
 html,body{
   height:100%;background:var(--bg);color:var(--ink);
   font-family:-apple-system,"Inter","PingFang SC","Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;
   font-size:14px;line-height:1.5;
 }
-body{display:grid;grid-template-columns:240px 1fr;height:100vh}
+body{display:grid;grid-template-columns:240px 1fr;height:100vh;height:100dvh}
+
+/* 顶部 mobile bar（默认隐藏，<= 768px 显示） */
+.mobile-bar{
+  display:none;
+  position:sticky;top:0;left:0;right:0;z-index:50;
+  background:var(--panel);border-bottom:1px solid var(--line);
+  padding:10px 14px;align-items:center;justify-content:space-between;gap:10px;
+}
+.mobile-bar h1{font-size:14px;font-weight:700;color:var(--coral)}
+.hamburger{
+  background:rgba(255,255,255,.06);border:1px solid var(--line);
+  width:36px;height:36px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  color:var(--ink);font-size:18px;
+}
+.drawer-mask{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:90;
+  backdrop-filter:blur(2px);
+}
+.drawer-mask.open{display:block}
 
 /* sidebar */
 aside{
@@ -51,7 +74,7 @@ aside h1 small{color:var(--ink-dim);font-weight:400}
 .proj-list .empty{color:var(--ink-dim);text-align:center;padding:20px 0;font-size:13px}
 
 /* main */
-main{padding:32px 40px;overflow-y:auto;display:flex;flex-direction:column;gap:24px}
+main{padding:32px 40px;overflow-y:auto;display:flex;flex-direction:column;gap:24px;overflow-x:hidden}
 .page-hd{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:14px}
 .page-hd h2{font-size:22px;font-weight:700}
 .page-hd .sub{color:var(--ink-dim);font-size:13px}
@@ -107,11 +130,70 @@ pre.json{
 pre.json .key{color:var(--coral)}
 pre.json .str{color:var(--mint)}
 pre.json .num{color:var(--coral-soft)}
+
+/* ── 移动端适配 (<= 768px) ───────────────────── */
+@media (max-width: 768px) {
+  body{
+    display:flex;flex-direction:column;
+  }
+  .mobile-bar{display:flex}
+  /* sidebar 变成 drawer */
+  aside{
+    position:fixed;top:0;left:0;bottom:0;z-index:100;
+    width:78vw;max-width:320px;
+    transform:translateX(-100%);
+    transition:transform .25s ease-out;
+    box-shadow:4px 0 24px rgba(0,0,0,.5);
+  }
+  aside.open{transform:translateX(0)}
+  main{
+    padding:16px 14px 60px;flex:1;gap:16px;
+  }
+  .page-hd{flex-direction:column;align-items:flex-start;gap:8px;padding-bottom:10px}
+  .page-hd h2{font-size:18px}
+  .page-hd .sub{font-size:12px;word-break:break-all}
+  /* tabs 横向滚动 */
+  .tabs{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs .tab{flex-shrink:0;padding:10px 14px;font-size:13px}
+  /* 卡片更紧凑 */
+  .card{padding:14px 16px;border-radius:10px}
+  .card h3{font-size:14px}
+  /* form 单列 */
+  .row{flex-direction:column}
+  /* button 更大易点 */
+  .btn{padding:12px 14px;font-size:14px;min-height:44px}
+  .btn.secondary{min-height:44px}
+  /* 表格横向滚动 */
+  .card table{display:block;overflow-x:auto;white-space:nowrap}
+  /* JSON viewer 缩小 */
+  pre.json{font-size:11px;padding:10px 12px;line-height:1.5}
+  /* Toast 适配安全区 */
+  .toast{bottom:16px;left:16px;right:16px;max-width:none}
+}
+
+/* iPhone notch / safe area */
+@supports (padding: env(safe-area-inset-top)) {
+  body{
+    padding-top:env(safe-area-inset-top);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  @media (max-width: 768px) {
+    .mobile-bar{padding-top:max(10px, env(safe-area-inset-top))}
+  }
+}
 </style>
 </head>
 <body>
 
-<aside>
+<div class="mobile-bar">
+  <button class="hamburger" id="hamburger" aria-label="菜单">☰</button>
+  <h1>🎬 Workbench</h1>
+  <div style="width:36px"></div><!-- spacer -->
+</div>
+<div class="drawer-mask" id="drawer-mask"></div>
+
+<aside id="sidebar">
   <h1>🎬 Workbench <small>v0.1</small></h1>
   <button class="btn" id="btn-new">+ New Project</button>
   <button class="btn secondary" id="btn-keys">🔑 API Keys</button>
@@ -180,7 +262,27 @@ function parseHash() {
   return { page: 'projects' };
 }
 
-window.addEventListener('hashchange', render);
+window.addEventListener('hashchange', () => {
+  closeDrawer();  // mobile: 切页时自动收 drawer
+  render();
+});
+
+/* ============================================================
+   Mobile drawer
+   ============================================================ */
+function openDrawer() {
+  $('sidebar').classList.add('open');
+  $('drawer-mask').classList.add('open');
+}
+function closeDrawer() {
+  $('sidebar').classList.remove('open');
+  $('drawer-mask').classList.remove('open');
+}
+$('hamburger').onclick = (e) => {
+  e.stopPropagation();
+  $('sidebar').classList.contains('open') ? closeDrawer() : openDrawer();
+};
+$('drawer-mask').onclick = closeDrawer;
 
 /* ============================================================
    渲染
